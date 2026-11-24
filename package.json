@@ -1,0 +1,23 @@
+{
+  "name": "omnidesk-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OmniDesk: Universal AI Computer Operator",
+  "scripts": {
+    "dev:web": "pnpm --filter @omnidesk/desktop dev",
+    "dev:desktop": "pnpm --filter @omnidesk/desktop tauri dev",
+    "build:schemas": "pnpm --filter @omnidesk/shared-schemas build",
+    "build:web": "pnpm --filter @omnidesk/desktop build",
+    "build:desktop": "pnpm --filter @omnidesk/desktop tauri build",
+    "typecheck": "pnpm -r typecheck",
+    "test:web": "pnpm --filter @omnidesk/desktop test",
+    "test:schemas": "pnpm --filter @omnidesk/shared-schemas test",
+    "test:backend": "cd backend && uv run pytest -v",
+    "test:rust": "cd apps/desktop/src-tauri && cargo test",
+    "test": "pnpm test:schemas && pnpm test:web && pnpm test:backend && pnpm test:rust"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  }
+}

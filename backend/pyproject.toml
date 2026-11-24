@@ -1,0 +1,33 @@
+[project]
+name = "omnidesk-engine"
+version = "0.1.0"
+description = "OmniDesk local-first AI intelligence, permission, workflow, and automation engine"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "fastapi>=0.115.8,<1.0.0",
+    "uvicorn[standard]>=0.34.0,<1.0.0",
+    "pydantic>=2.10.6,<3.0.0",
+    "httpx>=0.28.1,<1.0.0",
+    "openpyxl>=3.1.5,<4.0.0",
+    "keyring>=25.6.0,<26.0.0",
+    "pillow>=11.1.0,<12.0.0",
+    "psutil>=6.1.1,<8.0.0",
+    "playwright>=1.49.0,<2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.4,<9.0.0",
+    "pytest-asyncio>=0.25.3,<1.0.0",
+]
+
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["omnidesk_engine"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

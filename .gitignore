@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Python
+backend/.venv/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Rust / Tauri
+apps/desktop/src-tauri/target/
+apps/desktop/dist/
+
+# Local runtime state & databases (never commit user data or secrets)
+*.db
+*.db-shm
+*.db-wal
+.env
+.env.local
+.omnidesk/
+
+# OS & editor artifacts
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Demo generated reports
+demo-sandbox/
