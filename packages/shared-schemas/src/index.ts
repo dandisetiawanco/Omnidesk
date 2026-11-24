@@ -19,11 +19,19 @@ export const CapabilityStatusSchema = z.enum([
 ]);
 export type CapabilityStatus = z.infer<typeof CapabilityStatusSchema>;
 
+export const CapabilityMaturitySchema = z.enum([
+  "implemented_tested",
+  "implemented_untested",
+  "experimental",
+  "unsupported",
+]);
+
 export const CapabilityEntrySchema = z.object({
   id: z.string(),
   name: z.string(),
   category: z.enum(["os", "automation", "vision", "browser", "ai_runtime", "security"]),
   status: CapabilityStatusSchema,
+  maturity: CapabilityMaturitySchema.optional(),
   detail: z.string(),
   platform_note: z.string().optional(),
 });
@@ -71,6 +79,7 @@ export const ProviderStatusSchema = z.object({
   base_url: z.string().optional(),
   masked_key: z.string().optional(),
   available_models: z.array(z.string()),
+  model_capabilities: z.record(z.array(z.string())).optional(),
   selected_models: z.object({
     planning: z.string().optional(),
     vision: z.string().optional(),
@@ -233,6 +242,10 @@ export const TeachSessionSchema = z.object({
   status: z.enum(["recording", "stopped", "converted"]),
   started_at: z.string(),
   stopped_at: z.string().optional().nullable(),
+  scope_app: z.string().optional().nullable(),
+  scope_directory: z.string().optional().nullable(),
+  observer_active: z.boolean().optional(),
+  observer_note: z.string().optional().nullable(),
   events: z.array(TeachEventSchema),
   extracted_variables: z.array(
     z.object({

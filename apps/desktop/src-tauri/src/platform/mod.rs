@@ -14,6 +14,7 @@ pub struct CapabilityEntry {
     pub name: String,
     pub category: String,
     pub status: String,
+    pub maturity: String,
     pub detail: String,
     pub platform_note: Option<String>,
 }
@@ -27,6 +28,7 @@ pub struct ActiveWindowSnapshot {
 }
 
 pub trait PlatformAdapter {
+    fn platform_id(&self) -> &'static str;
     fn desktop_environment(&self) -> (String, String);
     fn detect_gpu(&self) -> String;
     fn detect_displays(&self) -> Vec<DisplayInfo>;
@@ -34,6 +36,8 @@ pub trait PlatformAdapter {
     fn platform_capabilities(&self) -> Vec<CapabilityEntry>;
     fn launch_application(&self, app_name: &str) -> Result<String, String>;
     fn active_window(&self) -> ActiveWindowSnapshot;
+    fn list_running_apps(&self) -> Vec<String>;
+    fn open_permission_settings(&self, pane: &str) -> Result<String, String>;
 }
 
 /// Reject characters that could invoke shell expansion or path traversal.
@@ -42,9 +46,9 @@ pub fn validate_app_identifier(raw: &str) -> Result<String, String> {
     if trimmed.is_empty() || trimmed.len() > 80 {
         return Err("Application name must be between 1 and 80 characters.".into());
     }
-    let valid = trimmed.chars().all(|c| {
-        c.is_ascii_alphanumeric() || matches!(c, ' ' | '-' | '_' | '.')
-    });
+    let valid = trimmed
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, ' ' | '-' | '_' | '.'));
     if !valid || trimmed.contains("..") {
         return Err("Application name contains unsupported characters.".into());
     }

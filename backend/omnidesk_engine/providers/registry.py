@@ -45,12 +45,26 @@ PROVIDER_CATALOG: dict[str, dict[str, Any]] = {
 }
 
 
+def detect_model_capabilities(models: list[str]) -> dict[str, list[str]]:
+    caps: dict[str, list[str]] = {}
+    for m in models:
+        low = m.lower()
+        tags = ["structured_json"]
+        if any(k in low for k in ("4o", "4.1", "gemini-2", "gemini-1.5", "claude-sonnet", "claude-3.5", "llava", "vision", "qwen2.5-vl")):
+            tags.append("vision")
+        if any(k in low for k in ("mini", "flash", "haiku", "lite", "small", "3b", "7b", "8b")):
+            tags.append("fast_tier")
+        caps[m] = tags
+    return caps
+
+
 class ProviderRegistry:
-    """Manages provider configuration, genuine availability probing, and structured planning calls."""
+    """Manages provider configuration, genuine availability probing, model discovery, and structured planning calls."""
 
     def __init__(self, db: Database, vault: CredentialVault) -> None:
         self.db = db
         self.vault = vault
+        self._discovered_models: dict[str, list[str]] = {}
 
     async def probe_ollama(self, base_url: str) -> tuple[bool, list[str], str]:
         try:
@@ -104,16 +118,19 @@ class ProviderRegistry:
                         status_detail=detail,
                         base_url=base_url,
                         available_models=models,
+                        model_capabilities=detect_model_capabilities(models),
                         selected_models=selected,
                     )
                 )
             elif pid == "openai_compatible":
                 reachable = False
-                models = []
+                models = self._discovered_models.get(pid, [])
                 detail = "Configure a local or self-hosted OpenAI-compatible base URL."
                 if probe_network and base_url:
                     key = self.vault.get_secret_internal(pid)
                     reachable, models, detail = await self.probe_openai_compatible(base_url, key)
+                    if models:
+                        self._discovered_models[pid] = models
                 elif pref.get("base_url"):
                     detail = f"Configured URL: {base_url}. Run connection test to verify."
                 statuses.append(
@@ -127,18 +144,23 @@ class ProviderRegistry:
                         base_url=base_url,
                         masked_key=cred.masked_key,
                         available_models=models,
+                        model_capabilities=detect_model_capabilities(models),
                         selected_models=selected,
                     )
                 )
             else:
                 reachable = False
+                models = self._discovered_models.get(pid) or list(meta["default_models"])
                 detail = (
-                    f"API key stored securely in {cred.storage_backend}."
+                    f"API key stored securely in {cred.storage_backend}. Run connection test to verify live access."
                     if cred.configured
                     else "Not configured. Add an API key to store in OS secure storage."
                 )
                 if probe_network and cred.configured:
-                    reachable, detail = await self.test_cloud_provider(pid, base_url)
+                    reachable, detail, discovered = await self.test_cloud_provider(pid, base_url)
+                    if discovered:
+                        self._discovered_models[pid] = discovered
+                        models = discovered
                 statuses.append(
                     ProviderStatus(
                         id=pid,  # type: ignore[arg-type]
@@ -149,18 +171,19 @@ class ProviderRegistry:
                         status_detail=detail,
                         base_url=base_url,
                         masked_key=cred.masked_key,
-                        available_models=list(meta["default_models"]),
+                        available_models=models,
+                        model_capabilities=detect_model_capabilities(models),
                         selected_models=selected,
                     )
                 )
         return statuses
 
-    async def test_cloud_provider(self, provider_id: str, base_url: str) -> tuple[bool, str]:
+    async def test_cloud_provider(self, provider_id: str, base_url: str) -> tuple[bool, str, list[str]]:
         api_key = self.vault.get_secret_internal(provider_id)
         if not api_key:
-            return False, "No API key stored for this provider."
+            return False, "No API key stored for this provider.", []
         try:
-            async with httpx.AsyncClient(timeout=4.0) as client:
+            async with httpx.AsyncClient(timeout=5.0) as client:
                 if provider_id == "openai":
                     resp = await client.get(
                         f"{base_url.rstrip('/')}/models",
@@ -180,16 +203,34 @@ class ProviderRegistry:
                         },
                     )
                 else:
-                    return False, "Unsupported provider."
+                    return False, "Unsupported provider.", []
             if resp.status_code == 200:
-                return True, "Verified live API connectivity."
+                discovered: list[str] = []
+                try:
+                    data = resp.json()
+                    if provider_id in ("openai", "anthropic"):
+                        discovered = [m["id"] for m in data.get("data", []) if "id" in m][:30]
+                    elif provider_id == "gemini":
+                        discovered = [
+                            m["name"].removeprefix("models/")
+                            for m in data.get("models", [])
+                            if "name" in m
+                        ][:30]
+                except Exception:
+                    pass
+                note = (
+                    f"Verified live API connectivity ({len(discovered)} model(s) discovered)."
+                    if discovered
+                    else "Verified live API connectivity."
+                )
+                return True, note, discovered
             if resp.status_code in (401, 403):
-                return False, "Authentication rejected by provider (check API key)."
-            return False, f"Provider returned HTTP {resp.status_code}."
+                return False, "Authentication rejected by provider (check API key).", []
+            return False, f"Provider returned HTTP {resp.status_code}.", []
         except httpx.TimeoutException:
-            return False, "Connection timed out while contacting provider."
+            return False, "Connection timed out while contacting provider.", []
         except Exception as exc:
-            return False, f"Network error: {redact_sensitive_text(str(exc))}"
+            return False, f"Network error: {redact_sensitive_text(str(exc))}", []
 
     async def update_provider(self, provider_id: str, payload: ProviderConfigUpdate) -> ProviderStatus:
         if provider_id not in PROVIDER_CATALOG:

@@ -1,10 +1,16 @@
 use std::process::Command;
 
-use super::{validate_app_identifier, ActiveWindowSnapshot, CapabilityEntry, DisplayInfo, PlatformAdapter};
+use super::{
+    validate_app_identifier, ActiveWindowSnapshot, CapabilityEntry, DisplayInfo, PlatformAdapter,
+};
 
 pub struct WindowsAdapter;
 
 impl PlatformAdapter for WindowsAdapter {
+    fn platform_id(&self) -> &'static str {
+        "windows"
+    }
+
     fn desktop_environment(&self) -> (String, String) {
         ("Windows Desktop Shell".to_string(), "DWM".to_string())
     }
@@ -33,14 +39,17 @@ impl PlatformAdapter for WindowsAdapter {
                 name: "Windows UI Automation".into(),
                 category: "os".into(),
                 status: "experimental".into(),
-                detail: "Windows UIA tree adapter is wired for semantic control lookup; validate on Windows 10/11 hardware.".into(),
-                platform_note: Some("Requires Windows build validation in CI/desktop testing.".into()),
+                maturity: "implemented_untested".into(),
+                detail: "Windows UIA adapter is wired for semantic control lookup; pending native Windows 10/11 runtime test."
+                    .into(),
+                platform_note: Some("Validated via CI compilation; requires Windows hardware verification.".into()),
             },
             CapabilityEntry {
                 id: "windows.credential_manager".into(),
                 name: "Windows Credential Manager".into(),
                 category: "security".into(),
                 status: "available".into(),
+                maturity: "implemented_untested".into(),
                 detail: "API provider secrets use Windows Credential Manager via keyring.".into(),
                 platform_note: None,
             },
@@ -49,6 +58,7 @@ impl PlatformAdapter for WindowsAdapter {
                 name: "Native Application Launcher".into(),
                 category: "automation".into(),
                 status: "available".into(),
+                maturity: "implemented_untested".into(),
                 detail: "Launches installed applications through Windows ShellExecute.".into(),
                 platform_note: None,
             },
@@ -75,5 +85,14 @@ impl PlatformAdapter for WindowsAdapter {
             accessibility_available: true,
             note: "Collected on demand.".into(),
         }
+    }
+
+    fn list_running_apps(&self) -> Vec<String> {
+        Vec::new()
+    }
+
+    fn open_permission_settings(&self, _pane: &str) -> Result<String, String> {
+        let _ = Command::new("explorer.exe").arg("ms-settings:privacy").status();
+        Ok("Opened Windows Privacy Settings.".into())
     }
 }

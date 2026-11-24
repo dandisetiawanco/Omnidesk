@@ -237,7 +237,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({ providers, onRefresh, on
                     onClick={() => void handleTest(p)}
                   >
                     <CheckCircle2 size={14} aria-hidden="true" />
-                    <span>Test Connection</span>
+                    <span>Test &amp; Discover Models</span>
                   </button>
                 </div>
                 {p.configured && p.id !== "ollama" && (
@@ -252,6 +252,17 @@ export const ModelsView: React.FC<ModelsViewProps> = ({ providers, onRefresh, on
                   </button>
                 )}
               </div>
+
+              {p.model_capabilities && Object.keys(p.model_capabilities).length > 0 && (
+                <div className="flex-row flex-wrap text-sm">
+                  <span className="text-muted">Capabilities for {roles.planning || p.available_models[0]}:</span>
+                  {(p.model_capabilities[roles.planning || p.available_models[0]] ?? ["structured_json"]).map(
+                    (cap) => (
+                      <StatusTag key={cap} tone="neutral" label={cap.replace("_", " ")} />
+                    )
+                  )}
+                </div>
+              )}
             </section>
           );
         })}

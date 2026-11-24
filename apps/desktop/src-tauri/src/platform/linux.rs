@@ -1,7 +1,9 @@
 use std::env;
 use std::process::Command;
 
-use super::{validate_app_identifier, ActiveWindowSnapshot, CapabilityEntry, DisplayInfo, PlatformAdapter};
+use super::{
+    validate_app_identifier, ActiveWindowSnapshot, CapabilityEntry, DisplayInfo, PlatformAdapter,
+};
 
 pub struct LinuxAdapter;
 
@@ -15,6 +17,10 @@ impl LinuxAdapter {
 }
 
 impl PlatformAdapter for LinuxAdapter {
+    fn platform_id(&self) -> &'static str {
+        "linux"
+    }
+
     fn desktop_environment(&self) -> (String, String) {
         let de = env::var("XDG_CURRENT_DESKTOP").unwrap_or_else(|_| "Linux Desktop".to_string());
         let ds = if Self::is_wayland() {
@@ -39,7 +45,9 @@ impl PlatformAdapter for LinuxAdapter {
     }
 
     fn glass_material_kind(&self) -> &'static str {
-        let de = env::var("XDG_CURRENT_DESKTOP").unwrap_or_default().to_lowercase();
+        let de = env::var("XDG_CURRENT_DESKTOP")
+            .unwrap_or_default()
+            .to_lowercase();
         if de.contains("kde") || de.contains("hyprland") {
             "linux_compositor"
         } else {
@@ -55,7 +63,9 @@ impl PlatformAdapter for LinuxAdapter {
                 name: "AT-SPI Accessibility Bus".into(),
                 category: "os".into(),
                 status: "experimental".into(),
-                detail: "Reads accessible UI trees over D-Bus AT-SPI when desktop accessibility is enabled.".into(),
+                maturity: "experimental".into(),
+                detail: "Reads accessible UI trees over D-Bus AT-SPI when desktop accessibility is enabled."
+                    .into(),
                 platform_note: None,
             },
             CapabilityEntry {
@@ -68,8 +78,10 @@ impl PlatformAdapter for LinuxAdapter {
                 .into(),
                 category: "vision".into(),
                 status: if wayland { "permission_required" } else { "experimental" }.into(),
+                maturity: if wayland { "experimental" } else { "implemented_untested" }.into(),
                 detail: if wayland {
-                    "Wayland restricts global capture and input injection; OmniDesk uses compositor-approved XDG portals only.".into()
+                    "Wayland restricts global capture and input injection; OmniDesk uses compositor-approved XDG portals only."
+                        .into()
                 } else {
                     "X11 capture available on demand when enabled by user.".into()
                 },
@@ -87,7 +99,9 @@ impl PlatformAdapter for LinuxAdapter {
                 name: "Secret Service API".into(),
                 category: "security".into(),
                 status: "available".into(),
-                detail: "Stores provider credentials via org.freedesktop.secrets (GNOME Keyring / KWallet).".into(),
+                maturity: "implemented_untested".into(),
+                detail: "Stores provider credentials via org.freedesktop.secrets (GNOME Keyring / KWallet)."
+                    .into(),
                 platform_note: None,
             },
         ]
@@ -110,7 +124,11 @@ impl PlatformAdapter for LinuxAdapter {
     fn active_window(&self) -> ActiveWindowSnapshot {
         let wayland = Self::is_wayland();
         ActiveWindowSnapshot {
-            app_name: if wayland { "Restricted on Wayland".into() } else { "X11 Active Window".into() },
+            app_name: if wayland {
+                "Restricted on Wayland".into()
+            } else {
+                "X11 Active Window".into()
+            },
             window_title: if wayland {
                 "Wayland compositors isolate global window titles without a portal grant".into()
             } else {
@@ -119,5 +137,13 @@ impl PlatformAdapter for LinuxAdapter {
             accessibility_available: !wayland,
             note: "OmniDesk reports Wayland isolation transparently.".into(),
         }
+    }
+
+    fn list_running_apps(&self) -> Vec<String> {
+        Vec::new()
+    }
+
+    fn open_permission_settings(&self, _pane: &str) -> Result<String, String> {
+        Err("Open your Linux desktop environment Privacy / Portal settings directly.".into())
     }
 }

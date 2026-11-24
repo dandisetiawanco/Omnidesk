@@ -133,6 +133,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         data-mobile-open={mobileOpen ? "true" : "false"}
         aria-label="Primary application navigation"
       >
+        <div className="sidebar-drag-strip" data-tauri-drag-region="true" aria-hidden="true" />
         <div className="sidebar-header">
           <div className="brand-lockup">
             <BrandMark size={28} />

@@ -15,8 +15,8 @@
     --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
     --radius-sm: 6px;
-    --radius-md: 8px;
-    --radius-lg: 12px;
+    --radius-md: 9px;
+    --radius-lg: 13px;
     --radius-xl: 16px;
 
     --space-1: 4px;
@@ -27,31 +27,36 @@
     --space-6: 24px;
     --space-8: 32px;
 
-    --sidebar-width: 244px;
-    --sidebar-collapsed: 68px;
-    --topbar-height: 52px;
+    --sidebar-width: 246px;
+    --sidebar-collapsed: 70px;
+    --topbar-height: 48px;
+    --macos-titlebar-inset: 0px;
 
     --motion-fast: 140ms;
     --motion-base: 210ms;
     --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
 
-    /* Light Mode verified WCAG AA tokens */
-    --bg-canvas: #f3f5f8;
+    /* Light Mode (Silver Frost) - WCAG AA verified */
+    --bg-canvas: #eef2f7;
+    --bg-canvas-native: rgb(238 242 247 / 0.84);
     --bg-surface: #ffffff;
-    --bg-surface-subtle: #eaeff5;
-    --bg-rail-glass: rgb(234 239 245 / 0.82);
-    --bg-overlay-glass: rgb(255 255 255 / 0.92);
-    --bg-hover: #e1e8f0;
-    --bg-active: #d5e2f2;
+    --bg-glass-panel: rgb(255 255 255 / 0.84);
+    --bg-surface-subtle: rgb(234 240 247 / 0.78);
+    --bg-rail-glass: rgb(232 238 246 / 0.74);
+    --bg-topbar-glass: rgb(242 246 250 / 0.78);
+    --bg-overlay-glass: rgb(252 253 255 / 0.9);
+    --bg-hover: rgb(219 229 240 / 0.72);
+    --bg-active: rgb(206 224 244 / 0.85);
 
     --text-primary: #11161f;
     --text-secondary: #455061;
     --text-on-accent: #ffffff;
     --text-on-danger: #ffffff;
 
-    --border-subtle: #cdd5e0;
+    --border-subtle: rgb(164 178 196 / 0.52);
     --border-control: #6e7b8f;
-    --border-specular: rgb(255 255 255 / 0.72);
+    --border-specular: rgb(255 255 255 / 0.82);
+    --glass-top-edge: rgb(255 255 255 / 0.92);
 
     --accent-solid: #0b66c3;
     --accent-solid-hover: #0955a3;
@@ -68,29 +73,37 @@
     --status-danger-solid: #b42318;
     --status-danger-solid-hover: #961c13;
 
-    --shadow-overlay: 0 20px 44px -16px rgb(17 22 31 / 0.22), 0 0 0 1px rgb(17 22 31 / 0.08);
-    --shadow-floating: 0 10px 26px -10px rgb(17 22 31 / 0.16);
+    --shadow-panel: 0 1px 2px rgb(17 22 31 / 0.05), 0 8px 20px -14px rgb(17 22 31 / 0.14);
+    --shadow-overlay: 0 24px 52px -16px rgb(17 22 31 / 0.24), 0 0 0 1px rgb(17 22 31 / 0.08);
+    --shadow-floating: 0 12px 30px -10px rgb(17 22 31 / 0.2), 0 0 0 1px rgb(17 22 31 / 0.08);
     --focus-ring: #0b66c3;
-    --backdrop-dim: rgb(17 22 31 / 0.44);
+    --backdrop-dim: rgb(17 22 31 / 0.42);
   }
 
-  /* System dark preference when no explicit light override is pinned */
+  :root[data-platform="macos"] {
+    --macos-titlebar-inset: 34px;
+  }
+
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg-canvas: #0e1116;
-      --bg-surface: #161b22;
-      --bg-surface-subtle: #12161d;
-      --bg-rail-glass: rgb(18 22 29 / 0.8);
-      --bg-overlay-glass: rgb(22 27 34 / 0.92);
-      --bg-hover: #1e2631;
-      --bg-active: #1c2c42;
+      --bg-canvas: #0d1117;
+      --bg-canvas-native: rgb(13 17 23 / 0.82);
+      --bg-surface: #151b23;
+      --bg-glass-panel: rgb(22 28 38 / 0.82);
+      --bg-surface-subtle: rgb(18 23 31 / 0.78);
+      --bg-rail-glass: rgb(16 20 28 / 0.72);
+      --bg-topbar-glass: rgb(15 19 26 / 0.76);
+      --bg-overlay-glass: rgb(21 27 36 / 0.9);
+      --bg-hover: rgb(36 46 61 / 0.74);
+      --bg-active: rgb(28 47 72 / 0.88);
 
       --text-primary: #f0f4f8;
       --text-secondary: #9ba7b8;
 
-      --border-subtle: #28313f;
+      --border-subtle: rgb(118 138 164 / 0.24);
       --border-control: #68768a;
-      --border-specular: rgb(240 244 248 / 0.1);
+      --border-specular: rgb(240 244 248 / 0.12);
+      --glass-top-edge: rgb(240 244 248 / 0.11);
 
       --accent-solid: #1563b8;
       --accent-solid-hover: #1b73d1;
@@ -107,28 +120,33 @@
       --status-danger-solid: #c92a2a;
       --status-danger-solid-hover: #b02222;
 
-      --shadow-overlay: 0 24px 56px -12px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(240 244 248 / 0.1);
-      --shadow-floating: 0 12px 30px -10px rgb(0 0 0 / 0.5);
+      --shadow-panel: 0 1px 2px rgb(0 0 0 / 0.3), 0 10px 24px -14px rgb(0 0 0 / 0.55);
+      --shadow-overlay: 0 28px 60px -12px rgb(0 0 0 / 0.65), 0 0 0 1px rgb(240 244 248 / 0.12);
+      --shadow-floating: 0 14px 34px -10px rgb(0 0 0 / 0.58), 0 0 0 1px rgb(240 244 248 / 0.11);
       --focus-ring: #6cb6ff;
       --backdrop-dim: rgb(4 7 12 / 0.62);
     }
   }
 
   :root[data-theme="dark"] {
-    --bg-canvas: #0e1116;
-    --bg-surface: #161b22;
-    --bg-surface-subtle: #12161d;
-    --bg-rail-glass: rgb(18 22 29 / 0.8);
-    --bg-overlay-glass: rgb(22 27 34 / 0.92);
-    --bg-hover: #1e2631;
-    --bg-active: #1c2c42;
+    --bg-canvas: #0d1117;
+    --bg-canvas-native: rgb(13 17 23 / 0.82);
+    --bg-surface: #151b23;
+    --bg-glass-panel: rgb(22 28 38 / 0.82);
+    --bg-surface-subtle: rgb(18 23 31 / 0.78);
+    --bg-rail-glass: rgb(16 20 28 / 0.72);
+    --bg-topbar-glass: rgb(15 19 26 / 0.76);
+    --bg-overlay-glass: rgb(21 27 36 / 0.9);
+    --bg-hover: rgb(36 46 61 / 0.74);
+    --bg-active: rgb(28 47 72 / 0.88);
 
     --text-primary: #f0f4f8;
     --text-secondary: #9ba7b8;
 
-    --border-subtle: #28313f;
+    --border-subtle: rgb(118 138 164 / 0.24);
     --border-control: #68768a;
-    --border-specular: rgb(240 244 248 / 0.1);
+    --border-specular: rgb(240 244 248 / 0.12);
+    --glass-top-edge: rgb(240 244 248 / 0.11);
 
     --accent-solid: #1563b8;
     --accent-solid-hover: #1b73d1;
@@ -145,15 +163,19 @@
     --status-danger-solid: #c92a2a;
     --status-danger-solid-hover: #b02222;
 
-    --shadow-overlay: 0 24px 56px -12px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(240 244 248 / 0.1);
-    --shadow-floating: 0 12px 30px -10px rgb(0 0 0 / 0.5);
+    --shadow-panel: 0 1px 2px rgb(0 0 0 / 0.3), 0 10px 24px -14px rgb(0 0 0 / 0.55);
+    --shadow-overlay: 0 28px 60px -12px rgb(0 0 0 / 0.65), 0 0 0 1px rgb(240 244 248 / 0.12);
+    --shadow-floating: 0 14px 34px -10px rgb(0 0 0 / 0.58), 0 0 0 1px rgb(240 244 248 / 0.11);
     --focus-ring: #6cb6ff;
     --backdrop-dim: rgb(4 7 12 / 0.62);
   }
 
-  /* Performance mode disables blur filters and collapses transitions for lower-powered hardware. */
+  /* Performance Mode collapses glass blur and motion for lower-powered Intel laptops. */
   :root[data-performance="true"] {
+    --bg-canvas-native: var(--bg-canvas);
+    --bg-glass-panel: var(--bg-surface);
     --bg-rail-glass: var(--bg-surface-subtle);
+    --bg-topbar-glass: var(--bg-canvas);
     --bg-overlay-glass: var(--bg-surface);
     --motion-fast: 0ms;
     --motion-base: 0ms;

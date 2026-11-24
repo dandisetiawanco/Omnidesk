@@ -9,6 +9,10 @@ import subprocess
 import psutil
 
 from omnidesk_engine.automation.browser import find_cached_chromium_executable
+from omnidesk_engine.automation.desktop_control import (
+    macos_accessibility_trusted,
+    macos_screen_recording_granted,
+)
 from omnidesk_engine.schemas import CapabilityEntry, DisplayInfo, SystemProfile
 from omnidesk_engine.security.credentials import CredentialVault
 
@@ -46,7 +50,9 @@ def _macos_gpu_and_displays() -> tuple[str, list[DisplayInfo]]:
 def _cpu_model() -> str:
     if platform.system() == "Darwin":
         try:
-            return subprocess.check_output(["sysctl", "-n", "machdep.cpu.brand_string"], text=True, timeout=2).strip()
+            return subprocess.check_output(
+                ["sysctl", "-n", "machdep.cpu.brand_string"], text=True, timeout=2
+            ).strip()
         except Exception:
             pass
     return platform.processor() or platform.machine()
@@ -68,6 +74,8 @@ def collect_system_profile(vault: CredentialVault) -> SystemProfile:
         ds = "Quartz Compositor"
         glass = "macos_vibrancy"
         gpu, displays = _macos_gpu_and_displays()
+        ax_ok = macos_accessibility_trusted()
+        scr_ok = macos_screen_recording_granted()
 
         capabilities.extend(
             [
@@ -75,23 +83,34 @@ def collect_system_profile(vault: CredentialVault) -> SystemProfile:
                     id="macos.accessibility",
                     name="macOS Accessibility API",
                     category="os",
-                    status="permission_required",
-                    detail="Grant Accessibility in System Settings > Privacy & Security for semantic desktop element targeting.",
-                    platform_note="OmniDesk never bypasses macOS TCC protections.",
+                    status="available" if ax_ok else "permission_required",
+                    maturity="implemented_tested",
+                    detail=(
+                        "Accessibility permission granted for live UI element inspection and controlled interaction."
+                        if ax_ok
+                        else "Grant Accessibility in System Settings > Privacy & Security for semantic UI control."
+                    ),
+                    platform_note="Checked live via AXIsProcessTrusted; OmniDesk never bypasses macOS TCC.",
                 ),
                 CapabilityEntry(
                     id="macos.screen_capture",
                     name="ScreenCaptureKit / Screen Recording",
                     category="vision",
-                    status="permission_required",
-                    detail="Opt-in snapshots only. Grant Screen Recording when enabling Live Workspace.",
+                    status="available" if scr_ok else "permission_required",
+                    maturity="implemented_tested",
+                    detail=(
+                        "Screen Recording granted for explicit opt-in Live Workspace snapshots."
+                        if scr_ok
+                        else "Opt-in snapshots only. Grant Screen Recording in System Settings when enabling Live Workspace."
+                    ),
                 ),
                 CapabilityEntry(
                     id="macos.app_launch",
-                    name="Native Application Launcher",
+                    name="Native App Launcher & Process Observer",
                     category="automation",
                     status="available",
-                    detail="Opens installed macOS applications using LaunchServices.",
+                    maturity="implemented_tested",
+                    detail="Lists running GUI apps via LaunchServices (`lsappinfo`) and opens apps/documents via `open -a`.",
                 ),
             ]
         )
@@ -109,7 +128,8 @@ def collect_system_profile(vault: CredentialVault) -> SystemProfile:
                 name="Windows UI Automation",
                 category="os",
                 status="experimental",
-                detail="Adapter prepared for Windows 10/11 UIA accessibility tree.",
+                maturity="implemented_untested",
+                detail="Adapter implemented for Windows 10/11 UIA accessibility tree; pending Windows runtime testing.",
             )
         )
     else:
@@ -129,10 +149,11 @@ def collect_system_profile(vault: CredentialVault) -> SystemProfile:
                 name="XDG Desktop Portals & AT-SPI",
                 category="os",
                 status="permission_required" if is_wayland else "experimental",
+                maturity="unsupported" if is_wayland else "experimental",
                 detail=(
                     "Wayland restricts global capture and synthetic input; OmniDesk uses compositor portals only."
                     if is_wayland
-                    else "X11 + AT-SPI desktop inspection."
+                    else "X11 + AT-SPI desktop inspection (pending Linux runtime verification)."
                 ),
             )
         )
@@ -144,10 +165,11 @@ def collect_system_profile(vault: CredentialVault) -> SystemProfile:
             name="Local Ollama Inference",
             category="ai_runtime",
             status="available" if ollama_bin else "not_installed",
+            maturity="implemented_tested",
             detail=(
                 "Ollama CLI detected locally."
                 if ollama_bin
-                else "Ollama is not installed on this device. Install Ollama or connect a provider in Models."
+                else "Ollama is not installed on this device. Install Ollama or configure a provider in Models."
             ),
         )
     )
@@ -159,6 +181,7 @@ def collect_system_profile(vault: CredentialVault) -> SystemProfile:
             name="Playwright Browser Automation",
             category="browser",
             status="available" if chromium else "not_installed",
+            maturity="implemented_tested",
             detail=(
                 "Playwright Chromium binary detected locally for DOM inspection and form preparation."
                 if chromium
@@ -173,6 +196,7 @@ def collect_system_profile(vault: CredentialVault) -> SystemProfile:
             name="Scoped File & Excel Engine",
             category="automation",
             status="available",
+            maturity="implemented_tested",
             detail="Scoped directory inspection, SHA-256 duplicate detection, dry-run previews, reversible moves, and .xlsx reporting.",
         )
     )
@@ -183,6 +207,7 @@ def collect_system_profile(vault: CredentialVault) -> SystemProfile:
             name="OS Secure Credential Vault",
             category="security",
             status="available" if vault.backend_name() != "unavailable" else "unsupported",
+            maturity="implemented_tested",
             detail=f"Active keyring backend: {vault.backend_name()}. API keys are never written to plaintext files.",
         )
     )

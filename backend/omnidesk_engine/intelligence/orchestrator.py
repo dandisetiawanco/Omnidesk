@@ -6,7 +6,16 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from omnidesk_engine.automation import apps, browser, clipboard, documents, filesystem, spreadsheet, vision
+from omnidesk_engine.automation import (
+    apps,
+    browser,
+    clipboard,
+    desktop_control,
+    documents,
+    filesystem,
+    spreadsheet,
+    vision,
+)
 from omnidesk_engine.config import EngineConfig
 from omnidesk_engine.db import Database
 from omnidesk_engine.intelligence.planner import TaskPlanner
@@ -243,6 +252,21 @@ class TaskOrchestrator:
         elif step.tool == "apps.launch":
             dry_run_items.append(f"Launch native application: {scope}")
             summary = f"Approve opening native desktop application '{scope}'."
+        elif step.tool == "apps.open_document":
+            app_name = str(step.parameters.get("app_name", "TextEdit"))
+            file_path = str(step.parameters.get("file_path", ""))
+            dry_run_items.append(f"Open verified document '{Path(file_path).name}' in {app_name}")
+            dry_run_items.append(f"Target file: {file_path}")
+            summary = f"Approve opening '{Path(file_path).name}' inside external app '{app_name}'."
+        elif step.tool == "desktop.click_element":
+            app_name = str(step.parameters.get("app_name", ""))
+            el_name = str(step.parameters.get("element_name", ""))
+            dry_run_items.append(f"Verify '{app_name}' is frontmost and click semantic element '{el_name}'")
+            summary = f"Approve target-verified Accessibility click on '{el_name}' in '{app_name}'."
+        elif step.tool == "desktop.type_text":
+            app_name = str(step.parameters.get("app_name", ""))
+            dry_run_items.append(f"Verify '{app_name}' is frontmost (non-secure field) and type bounded text")
+            summary = f"Approve controlled text entry into '{app_name}'."
         else:
             dry_run_items.append(f"Execute tool '{step.tool}' on target '{scope}'.")
             summary = f"Approve executing '{step.title}'."
@@ -422,6 +446,45 @@ class TaskOrchestrator:
         if step.tool == "apps.launch":
             return await asyncio.to_thread(apps.launch_application, p["app_name"])
 
+        if step.tool == "apps.list_running":
+            running = await asyncio.to_thread(desktop_control.list_running_apps)
+            return {"count": len(running), "apps": [a["name"] for a in running]}
+
+        if step.tool == "apps.open_document":
+            return await asyncio.to_thread(
+                desktop_control.open_document_in_app,
+                p["app_name"],
+                p["file_path"],
+                allowed_roots,
+            )
+
+        if step.tool == "desktop.inspect_accessibility":
+            settings = self.db.get_settings()
+            return await asyncio.to_thread(
+                desktop_control.inspect_accessibility_tree,
+                p.get("app_name"),
+                settings.excluded_apps,
+            )
+
+        if step.tool == "desktop.click_element":
+            settings = self.db.get_settings()
+            return await asyncio.to_thread(
+                desktop_control.click_semantic_element,
+                p["app_name"],
+                p["element_name"],
+                settings.excluded_apps,
+                p.get("role", "button"),
+            )
+
+        if step.tool == "desktop.type_text":
+            settings = self.db.get_settings()
+            return await asyncio.to_thread(
+                desktop_control.type_text_into_target,
+                p["app_name"],
+                p["text"],
+                settings.excluded_apps,
+            )
+
         if step.tool == "browser.navigate_and_extract":
             res = await browser.navigate_and_extract(
                 p["url"], selector=p.get("selector"), timeout_ms=20000
@@ -585,5 +648,22 @@ def create_flagship_demo_sandbox(base_dir: Path) -> dict[str, Any]:
         "prompt": (
             f"Organize the files in {demo_dir} by category, identify possible duplicates, "
             "and generate an Excel report without deleting anything."
+        ),
+    }
+
+
+def create_external_app_demo_sandbox(base_dir: Path) -> dict[str, Any]:
+    """Creates a dedicated non-sensitive sandbox folder for external application automation testing."""
+    import platform
+
+    demo_dir = (base_dir / "external-app-demo").resolve()
+    demo_dir.mkdir(parents=True, exist_ok=True)
+    app_name = "TextEdit" if platform.system() == "Darwin" else ("Notepad" if platform.system() == "Windows" else "Text Editor")
+    return {
+        "directory": str(demo_dir),
+        "app_name": app_name,
+        "prompt": (
+            f"Create an automation brief in {demo_dir}, open it in {app_name}, "
+            "and inspect accessibility state."
         ),
     }

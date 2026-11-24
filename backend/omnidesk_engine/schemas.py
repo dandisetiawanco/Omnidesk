@@ -45,6 +45,12 @@ class CapabilityEntry(BaseModel):
     name: str
     category: Literal["os", "automation", "vision", "browser", "ai_runtime", "security"]
     status: Literal["available", "permission_required", "not_installed", "experimental", "unsupported"]
+    maturity: Literal[
+        "implemented_tested",
+        "implemented_untested",
+        "experimental",
+        "unsupported",
+    ] = "implemented_tested"
     detail: str
     platform_note: str | None = None
 
@@ -87,6 +93,7 @@ class ProviderStatus(BaseModel):
     base_url: str | None = None
     masked_key: str | None = None
     available_models: list[str] = Field(default_factory=list)
+    model_capabilities: dict[str, list[str]] = Field(default_factory=dict)
     selected_models: SelectedModels = Field(default_factory=SelectedModels)
 
 
@@ -158,6 +165,8 @@ class CreateTaskRequest(BaseModel):
     target_directory: str | None = None
     dry_run_only: bool = False
     provider_id: str | None = None
+    attached_app: str | None = None
+    attached_url: str | None = None
 
 
 class ApprovalDecisionRequest(BaseModel):
@@ -245,6 +254,10 @@ class TeachSession(BaseModel):
     status: Literal["recording", "stopped", "converted"]
     started_at: str = Field(default_factory=utc_now_iso)
     stopped_at: str | None = None
+    scope_app: str | None = None
+    scope_directory: str | None = None
+    observer_active: bool = False
+    observer_note: str | None = None
     events: list[TeachEvent] = Field(default_factory=list)
     extracted_variables: list[TeachVariable] = Field(default_factory=list)
     workflow_id: str | None = None
@@ -252,6 +265,9 @@ class TeachSession(BaseModel):
 
 class StartTeachRequest(BaseModel):
     name: str = Field(min_length=2, max_length=120)
+    scope_app: str | None = None
+    scope_directory: str | None = None
+    enable_live_observer: bool = True
 
 
 class RecordTeachStepRequest(BaseModel):

@@ -65,7 +65,8 @@ pub fn collect_system_profile() -> SystemProfile {
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| "Unknown CPU".to_string());
 
-    let memory_total_gb = ((sys.total_memory() as f64) / (1024.0 * 1024.0 * 1024.0) * 10.0).round() / 10.0;
+    let memory_total_gb =
+        ((sys.total_memory() as f64) / (1024.0 * 1024.0 * 1024.0) * 10.0).round() / 10.0;
 
     let mut capabilities = adapter.platform_capabilities();
 
@@ -75,10 +76,12 @@ pub fn collect_system_profile() -> SystemProfile {
         name: "Local Ollama Inference".into(),
         category: "ai_runtime".into(),
         status: if ollama_installed { "available" } else { "not_installed" }.into(),
+        maturity: "implemented_tested".into(),
         detail: if ollama_installed {
             "Ollama CLI detected for local model inference.".into()
         } else {
-            "Ollama is not installed on this device. Install Ollama or configure a provider in Models.".into()
+            "Ollama is not installed on this device. Install Ollama or configure a provider in Models."
+                .into()
         },
         platform_note: None,
     });
@@ -89,8 +92,9 @@ pub fn collect_system_profile() -> SystemProfile {
         name: "Playwright Browser Automation".into(),
         category: "browser".into(),
         status: if playwright_ready { "available" } else { "not_installed" }.into(),
+        maturity: "implemented_tested".into(),
         detail: if playwright_ready {
-            "Playwright browser binaries detected locally for real DOM automation.".into()
+            "Playwright Chromium browser binaries detected locally for real DOM automation.".into()
         } else {
             "Run `uv run playwright install chromium` in backend/ to download Chromium.".into()
         },
@@ -102,7 +106,9 @@ pub fn collect_system_profile() -> SystemProfile {
         name: "Scoped File & Spreadsheet Engine".into(),
         category: "automation".into(),
         status: "available".into(),
-        detail: "Scoped inspection, SHA-256 duplicate detection, dry-run planning, reversible moves, and .xlsx reporting.".into(),
+        maturity: "implemented_tested".into(),
+        detail: "Scoped inspection, SHA-256 duplicate detection, dry-run planning, reversible moves, and .xlsx reporting."
+            .into(),
         platform_note: None,
     });
 
@@ -132,6 +138,9 @@ mod tests {
         assert!(!profile.os_name.is_empty());
         assert!(profile.cpu_cores >= 1);
         assert!(profile.memory_total_gb > 0.0);
-        assert!(profile.capabilities.iter().any(|c| c.id == "automation.filesystem"));
+        assert!(profile
+            .capabilities
+            .iter()
+            .any(|c| c.id == "automation.filesystem" && c.maturity == "implemented_tested"));
     }
 }

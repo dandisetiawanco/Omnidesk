@@ -12,10 +12,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 from omnidesk_engine import __version__
-from omnidesk_engine.automation import apps, capabilities, vision
+from omnidesk_engine.automation import capabilities, desktop_control, vision
 from omnidesk_engine.config import EngineConfig
 from omnidesk_engine.db import Database
-from omnidesk_engine.intelligence.orchestrator import TaskOrchestrator, create_flagship_demo_sandbox
+from omnidesk_engine.intelligence.orchestrator import (
+    TaskOrchestrator,
+    create_external_app_demo_sandbox,
+    create_flagship_demo_sandbox,
+)
 from omnidesk_engine.intelligence.planner import TaskPlanner
 from omnidesk_engine.mcp.server import handle_mcp_rpc, list_mcp_tools
 from omnidesk_engine.providers.registry import ProviderRegistry
@@ -49,6 +53,7 @@ def create_app(config: EngineConfig | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         yield
+        teach_engine.stop_all_observers()
         orchestrator.emergency_stop_all()
 
     api = FastAPI(
@@ -98,7 +103,25 @@ def create_app(config: EngineConfig | None = None) -> FastAPI:
 
     @api.get("/api/system/active-window", dependencies=[Depends(require_auth)])
     async def active_window() -> dict[str, Any]:
-        return await asyncio.to_thread(apps.get_active_window_context)
+        return await asyncio.to_thread(desktop_control.get_frontmost_application)
+
+    @api.get("/api/system/running-apps", dependencies=[Depends(require_auth)])
+    async def running_apps() -> list[dict[str, Any]]:
+        return await asyncio.to_thread(desktop_control.list_running_apps)
+
+    @api.get("/api/system/accessibility", dependencies=[Depends(require_auth)])
+    async def accessibility_tree(app_name: str | None = None) -> dict[str, Any]:
+        settings = db.get_settings()
+        return await asyncio.to_thread(
+            desktop_control.inspect_accessibility_tree, app_name, settings.excluded_apps
+        )
+
+    @api.post("/api/system/open-permissions/{pane}", dependencies=[Depends(require_auth)])
+    async def open_permissions(pane: str) -> dict[str, Any]:
+        try:
+            return await asyncio.to_thread(desktop_control.open_os_permission_settings, pane)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @api.post("/api/live/snapshot", dependencies=[Depends(require_auth)])
     async def capture_live_snapshot() -> dict[str, Any]:
@@ -210,6 +233,7 @@ def create_app(config: EngineConfig | None = None) -> FastAPI:
 
     @api.post("/api/emergency-stop", dependencies=[Depends(require_auth)])
     async def emergency_stop() -> dict[str, Any]:
+        teach_engine.stop_all_observers()
         stopped = orchestrator.emergency_stop_all()
         return {"stopped_task_ids": stopped, "count": len(stopped)}
 
@@ -221,6 +245,20 @@ def create_app(config: EngineConfig | None = None) -> FastAPI:
             settings.scoped_directories.append(res["directory"])
             db.save_settings(settings)
         db.add_audit("demo", "setup_flagship_sandbox", f"Created reproducible demo folder at {res['directory']}.")
+        return res
+
+    @api.post("/api/demo/setup-external-app", dependencies=[Depends(require_auth)])
+    async def setup_external_app_demo() -> dict[str, Any]:
+        res = await asyncio.to_thread(create_external_app_demo_sandbox, cfg.data_dir)
+        settings = db.get_settings()
+        if res["directory"] not in settings.scoped_directories:
+            settings.scoped_directories.append(res["directory"])
+            db.save_settings(settings)
+        db.add_audit(
+            "demo",
+            "setup_external_app_sandbox",
+            f"Prepared external app automation sandbox ({res['app_name']}) at {res['directory']}.",
+        )
         return res
 
     @api.get("/api/events/stream", dependencies=[Depends(require_auth)])
@@ -290,7 +328,14 @@ def create_app(config: EngineConfig | None = None) -> FastAPI:
 
     @api.post("/api/teach/sessions", dependencies=[Depends(require_auth)])
     async def start_teach_session(req: StartTeachRequest) -> dict[str, Any]:
-        return teach_engine.start_session(req.name).model_dump()
+        return teach_engine.start_session(req).model_dump()
+
+    @api.delete("/api/teach/sessions/{session_id}/step/{event_id}", dependencies=[Depends(require_auth)])
+    async def delete_teach_step(session_id: str, event_id: str) -> dict[str, Any]:
+        try:
+            return teach_engine.delete_step(session_id, event_id).model_dump()
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     @api.post("/api/teach/sessions/{session_id}/step", dependencies=[Depends(require_auth)])
     async def record_teach_step(session_id: str, req: RecordTeachStepRequest) -> dict[str, Any]:

@@ -22,7 +22,7 @@ def generate_markdown_report(
     root = validate_scoped_directory(directory, allowed_roots=allowed_roots)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     fname = filename or f"OmniDesk_Summary_{stamp}.md"
-    if not fname.endswith(".md"):
+    if not (fname.endswith(".md") or fname.endswith(".txt")):
         fname += ".md"
     target = validate_child_path(root, root / fname)
 

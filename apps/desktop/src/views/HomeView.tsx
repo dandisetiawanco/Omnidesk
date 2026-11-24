@@ -1,7 +1,9 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
+  AppWindow,
   FolderOpen,
   GitBranch,
+  Globe,
   Play,
   ShieldCheck,
   TerminalSquare,
@@ -14,6 +16,7 @@ import type {
   WorkflowDefinition,
 } from "@omnidesk/shared-schemas";
 import { StatusTag } from "../components/StatusTag";
+import { api } from "../lib/api";
 import { pickScopedDirectory } from "../lib/tauri";
 
 interface HomeViewProps {
@@ -23,8 +26,16 @@ interface HomeViewProps {
   tasks: TaskRun[];
   workflows: WorkflowDefinition[];
   demoDirectory: string | null;
-  onStartTask: (prompt: string, targetDir?: string, dryRun?: boolean) => Promise<void>;
+  onStartTask: (
+    prompt: string,
+    targetDir?: string,
+    dryRun?: boolean,
+    providerId?: string,
+    attachedApp?: string,
+    attachedUrl?: string
+  ) => Promise<void>;
   onRunFlagshipDemo: () => Promise<void>;
+  onRunExternalAppDemo: () => Promise<void>;
   onOpenTask: (taskId: string) => void;
   onRunWorkflow: (wf: WorkflowDefinition) => Promise<void>;
   onNavigateModels: () => void;
@@ -38,16 +49,17 @@ const SUGGESTED_ACTIONS = [
       "Organize the files in my folder by category, identify possible duplicates, and generate an Excel report without deleting anything.",
   },
   {
-    label: "Search local documents & summarize",
-    prompt: "Search documents for 'invoice' and generate a summary report.",
+    label: "External app brief in TextEdit",
+    prompt:
+      "Create an automation brief in my sandbox folder, open it in TextEdit, and inspect accessibility state.",
   },
   {
-    label: "Inspect a webpage with Playwright",
+    label: "Inspect active app accessibility tree",
+    prompt: "Inspect active window accessibility tree and running GUI applications.",
+  },
+  {
+    label: "Extract webpage with Playwright",
     prompt: "Browse https://example.com and extract the main content and links.",
-  },
-  {
-    label: "Open native Calculator app",
-    prompt: "Open Calculator",
   },
 ];
 
@@ -60,6 +72,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   demoDirectory,
   onStartTask,
   onRunFlagshipDemo,
+  onRunExternalAppDemo,
   onOpenTask,
   onRunWorkflow,
   onNavigateModels,
@@ -67,9 +80,26 @@ export const HomeView: React.FC<HomeViewProps> = ({
 }) => {
   const [prompt, setPrompt] = useState("");
   const [targetDir, setTargetDir] = useState(demoDirectory ?? "");
+  const [selectedProvider, setSelectedProvider] = useState("");
+  const [attachedApp, setAttachedApp] = useState("");
+  const [attachedUrl, setAttachedUrl] = useState("");
+  const [showContextBar, setShowContextBar] = useState(false);
+  const [runningApps, setRunningApps] = useState<string[]>([]);
   const [dryRunOnly, setDryRunOnly] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (demoDirectory && !targetDir) setTargetDir(demoDirectory);
+  }, [demoDirectory, targetDir]);
+
+  useEffect(() => {
+    if (!showContextBar) return;
+    api
+      .listRunningApps()
+      .then((list) => setRunningApps(list.map((a) => a.name)))
+      .catch(() => {});
+  }, [showContextBar]);
 
   const activeTask = tasks.find((t) =>
     ["running", "paused", "awaiting_approval", "planning"].includes(t.status)
@@ -90,7 +120,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
     setFormError(null);
     setSubmitting(true);
     try {
-      await onStartTask(prompt.trim(), targetDir.trim() || undefined, dryRunOnly);
+      await onStartTask(
+        prompt.trim(),
+        targetDir.trim() || undefined,
+        dryRunOnly,
+        selectedProvider || undefined,
+        attachedApp.trim() || undefined,
+        attachedUrl.trim() || undefined
+      );
       setPrompt("");
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Could not start task.");
@@ -105,30 +142,60 @@ export const HomeView: React.FC<HomeViewProps> = ({
         <div>
           <h1 className="page-title">Command Center</h1>
           <p className="page-subtitle">
-            Your computer. Powered by intelligence. Plan and approve real file, browser, and
-            application work from one controlled workspace.
+            Your computer. Powered by intelligence. Plan, verify, and approve real desktop, file,
+            and browser operations from one workspace.
           </p>
         </div>
-        <button
-          type="button"
-          className="btn btn-primary"
-          disabled={submitting}
-          onClick={() => void onRunFlagshipDemo()}
-        >
-          <Play size={15} aria-hidden="true" />
-          <span>Run Flagship Folder Demo</span>
-        </button>
+        <div className="flex-row flex-wrap">
+          <button
+            type="button"
+            className="btn"
+            disabled={submitting}
+            onClick={() => void onRunExternalAppDemo()}
+          >
+            <AppWindow size={15} aria-hidden="true" />
+            <span>External App Demo</span>
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={submitting}
+            onClick={() => void onRunFlagshipDemo()}
+          >
+            <Play size={15} aria-hidden="true" />
+            <span>Run Flagship Folder Demo</span>
+          </button>
+        </div>
       </div>
 
       <div className="home-composer-grid">
-        <section className="panel" aria-label="Natural language task composer">
+        <section className="panel panel-composer" aria-label="Natural language task composer">
           <div className="panel-header">
             <h2 className="panel-title">Start an Operator Task</h2>
-            <StatusTag
-              tone={settings.privacy_mode === "local_only" ? "success" : "accent"}
-              kind="shield"
-              label={settings.privacy_mode === "local_only" ? "Local-only mode" : "Cloud-assisted"}
-            />
+            <div className="flex-row flex-wrap">
+              <label htmlFor="home-model-select" className="visually-hidden">
+                Planner model provider
+              </label>
+              <select
+                id="home-model-select"
+                className="select"
+                style={{ width: "auto", minHeight: 30, padding: "2px 10px", fontSize: 12.5 }}
+                value={selectedProvider}
+                onChange={(e) => setSelectedProvider(e.target.value)}
+              >
+                <option value="">Planner: Auto (Local-first)</option>
+                {configuredProviders.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+              <StatusTag
+                tone={settings.privacy_mode === "local_only" ? "success" : "accent"}
+                kind="shield"
+                label={settings.privacy_mode === "local_only" ? "Local-only" : "Cloud-assisted"}
+              />
+            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="list-stack" style={{ gap: 14 }} noValidate>
@@ -146,8 +213,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 aria-describedby={formError ? "home-command-error" : "home-command-hint"}
               />
               <span id="home-command-hint" className="field-hint">
-                Modifying files, opening apps, or visiting external URLs will pause for explicit
-                dry-run approval.
+                File mutations, app launches, and external URLs pause for explicit dry-run
+                approval.
               </span>
               {formError && (
                 <p id="home-command-error" role="alert" style={{ color: "var(--status-danger-text)" }}>
@@ -173,8 +240,54 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   <FolderOpen size={15} aria-hidden="true" />
                   <span>Browse</span>
                 </button>
+                <button
+                  type="button"
+                  className="btn"
+                  aria-expanded={showContextBar}
+                  onClick={() => setShowContextBar((v) => !v)}
+                >
+                  <span>Attach Context</span>
+                </button>
               </div>
             </div>
+
+            {showContextBar && (
+              <div className="panel-subtle two-col" style={{ gap: 12 }}>
+                <div className="field">
+                  <label htmlFor="ctx-app" className="text-sm flex-row">
+                    <AppWindow size={13} aria-hidden="true" />
+                    <span>Target Desktop App</span>
+                  </label>
+                  <select
+                    id="ctx-app"
+                    className="select"
+                    value={attachedApp}
+                    onChange={(e) => setAttachedApp(e.target.value)}
+                  >
+                    <option value="">None attached</option>
+                    {runningApps.map((a) => (
+                      <option key={a} value={a}>
+                        {a}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="field">
+                  <label htmlFor="ctx-url" className="text-sm flex-row">
+                    <Globe size={13} aria-hidden="true" />
+                    <span>Reference URL</span>
+                  </label>
+                  <input
+                    id="ctx-url"
+                    className="input mono"
+                    type="url"
+                    placeholder="https://example.com"
+                    value={attachedUrl}
+                    onChange={(e) => setAttachedUrl(e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
 
             <div className="flex-row justify-between flex-wrap">
               <label className="flex-row text-sm">
@@ -193,7 +306,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </form>
 
           <div className="list-stack" style={{ gap: 8 }}>
-            <div className="field-label">Suggested Tasks</div>
+            <div className="field-label">Suggested Actions</div>
             <div className="flex-row flex-wrap">
               {SUGGESTED_ACTIONS.map((item) => (
                 <button
@@ -266,8 +379,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
               ))
             ) : (
               <p className="text-sm text-muted">
-                No external AI provider configured yet. Built-in local deterministic planner is
-                ready for file, report, browser, and app tasks.
+                No external AI provider configured yet. Local deterministic planner is active for
+                file, report, browser, and native app operations.
               </p>
             )}
           </div>
@@ -299,15 +412,15 @@ export const HomeView: React.FC<HomeViewProps> = ({
       <div className="home-lower-grid">
         <section className="panel" aria-label="Recent tasks">
           <div className="panel-header">
-            <h2 className="panel-title">Recent Tasks</h2>
+            <h2 className="panel-title">Recent Executions</h2>
             <span className="text-sm text-muted tabular">{tasks.length} recorded locally</span>
           </div>
           {tasks.length === 0 ? (
             <div className="state-box">
               <strong>No tasks executed yet.</strong>
               <p className="text-sm text-muted">
-                Run the Flagship Folder Demo or enter a task above to see verified execution
-                history here.
+                Run the Flagship Folder Demo or External App Demo above to inspect verified
+                execution history here.
               </p>
             </div>
           ) : (

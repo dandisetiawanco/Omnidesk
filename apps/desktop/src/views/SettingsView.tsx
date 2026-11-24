@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { FolderPlus, Save, ShieldCheck, Trash2 } from "lucide-react";
+import { ExternalLink, FolderPlus, Save, ShieldCheck, Trash2 } from "lucide-react";
 import type { AppSettings, SystemProfile } from "@omnidesk/shared-schemas";
 import { api } from "../lib/api";
 import { BrandMark } from "../components/BrandMark";
 import { StatusTag } from "../components/StatusTag";
 import { resolveSystemScheme } from "../lib/theme";
-import { pickScopedDirectory } from "../lib/tauri";
+import { openOsPermissionPane, pickScopedDirectory } from "../lib/tauri";
 
 interface SettingsViewProps {
   settings: AppSettings;
@@ -362,8 +362,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <thead>
                   <tr>
                     <th scope="col">Capability</th>
-                    <th scope="col">Category</th>
-                    <th scope="col">Status</th>
+                    <th scope="col">Maturity</th>
+                    <th scope="col">Runtime Status</th>
                     <th scope="col">Detail</th>
                   </tr>
                 </thead>
@@ -371,7 +371,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   {profile.capabilities.map((cap) => (
                     <tr key={cap.id}>
                       <td style={{ fontWeight: 580 }}>{cap.name}</td>
-                      <td className="text-sm text-muted">{cap.category}</td>
+                      <td className="text-sm">
+                        <StatusTag
+                          tone={cap.maturity === "implemented_tested" ? "accent" : "neutral"}
+                          label={(cap.maturity ?? "implemented_tested").replace(/_/g, " ")}
+                        />
+                      </td>
                       <td>
                         <StatusTag
                           tone={
@@ -384,7 +389,28 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                           label={cap.status.replace(/_/g, " ")}
                         />
                       </td>
-                      <td className="text-sm">{cap.detail}</td>
+                      <td className="text-sm">
+                        <div>{cap.detail}</div>
+                        {cap.status === "permission_required" && cap.id.startsWith("macos.") && (
+                          <button
+                            type="button"
+                            className="btn"
+                            style={{ marginTop: 6, minHeight: 28, fontSize: 12 }}
+                            onClick={async () => {
+                              const pane =
+                                cap.id === "macos.screen_capture"
+                                  ? "screen_recording"
+                                  : "accessibility";
+                              const msg = await openOsPermissionPane(pane);
+                              if (!msg) await api.openPermissionSettings(pane);
+                              onNotify("Opened macOS System Settings", `Review ${pane.replace("_", " ")} permission.`, "info");
+                            }}
+                          >
+                            <ExternalLink size={12} aria-hidden="true" />
+                            <span>Open System Settings</span>
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

@@ -7,6 +7,7 @@ import {
   Play,
   ShieldCheck,
   Square,
+  Trash2,
 } from "lucide-react";
 import type { TeachSession, WorkflowDefinition } from "@omnidesk/shared-schemas";
 import { api } from "../lib/api";
@@ -14,6 +15,8 @@ import { StatusTag } from "../components/StatusTag";
 
 interface TeachModeViewProps {
   demoDirectory: string | null;
+  activeRecording: TeachSession | null;
+  onRecordingChange: (session: TeachSession | null) => void;
   onWorkflowCreated: (wf: WorkflowDefinition) => void;
   onOpenInStudio: (wfId: string) => void;
   onTestWorkflow: (wf: WorkflowDefinition) => Promise<void>;
@@ -22,26 +25,38 @@ interface TeachModeViewProps {
 
 export const TeachModeView: React.FC<TeachModeViewProps> = ({
   demoDirectory,
+  activeRecording,
+  onRecordingChange,
   onWorkflowCreated,
   onOpenInStudio,
   onTestWorkflow,
   onNotify,
 }) => {
   const [sessions, setSessions] = useState<TeachSession[]>([]);
-  const [active, setActive] = useState<TeachSession | null>(null);
-  const [sessionName, setSessionName] = useState("Weekly Downloads Audit");
+  const [active, setActive] = useState<TeachSession | null>(activeRecording);
+  const [runningApps, setRunningApps] = useState<string[]>([]);
+  const [sessionName, setSessionName] = useState("External App & Folder Workflow");
+  const [scopeApp, setScopeApp] = useState("");
   const [targetDir, setTargetDir] = useState(demoDirectory || "~/Downloads");
   const [targetUrl, setTargetUrl] = useState("https://example.com");
+  const [enableLiveObserver, setEnableLiveObserver] = useState(true);
   const [convertedWf, setConvertedWf] = useState<WorkflowDefinition | null>(null);
   const [busy, setBusy] = useState(false);
 
   const loadSessions = async () => {
     try {
-      const list = await api.listTeachSessions();
+      const [list, apps] = await Promise.all([api.listTeachSessions(), api.listRunningApps()]);
       setSessions(list);
-      if (!active && list.length > 0) setActive(list[0]);
+      setRunningApps(apps.map((a) => a.name).filter((n) => n.toLowerCase() !== "omnidesk"));
+      const liveRec = list.find((s) => s.status === "recording") ?? null;
+      onRecordingChange(liveRec);
+      setActive((prev) => {
+        if (liveRec) return liveRec;
+        if (prev) return list.find((s) => s.id === prev.id) ?? list[0] ?? null;
+        return list[0] ?? null;
+      });
     } catch {
-      // Handled by parent connection status.
+      // Handled by parent state.
     }
   };
 
@@ -53,14 +68,42 @@ export const TeachModeView: React.FC<TeachModeViewProps> = ({
     if (demoDirectory) setTargetDir(demoDirectory);
   }, [demoDirectory]);
 
+  // Poll captured external app / folder transitions live while a Teach Mode session is actively recording.
+  useEffect(() => {
+    if (active?.status !== "recording") return;
+    const timer = setInterval(() => {
+      void api.listTeachSessions().then((list) => {
+        setSessions(list);
+        const refreshed = list.find((s) => s.id === active.id) ?? null;
+        if (refreshed) {
+          setActive(refreshed);
+          onRecordingChange(refreshed.status === "recording" ? refreshed : null);
+        }
+      });
+    }, 1800);
+    return () => clearInterval(timer);
+  }, [active?.id, active?.status, onRecordingChange]);
+
   const startRecording = async () => {
     setBusy(true);
     try {
-      const created = await api.startTeachSession(sessionName.trim() || "Recorded Demonstration");
+      const created = await api.startTeachSession({
+        name: sessionName.trim() || "Recorded Demonstration",
+        scope_app: scopeApp || undefined,
+        scope_directory: targetDir.trim() || undefined,
+        enable_live_observer: enableLiveObserver,
+      });
       setActive(created);
+      onRecordingChange(created);
       setConvertedWf(null);
       setSessions((prev) => [created, ...prev]);
-      onNotify("Teach Mode recording started", "Only explicit permitted actions are captured.", "info");
+      onNotify(
+        "Teach Mode recording started",
+        enableLiveObserver
+          ? "Observing permitted external app switches and scoped folder changes."
+          : "Manual semantic step capture active.",
+        "info"
+      );
     } catch (err) {
       onNotify("Could not start recording", err instanceof Error ? err.message : undefined, "error");
     } finally {
@@ -94,6 +137,17 @@ export const TeachModeView: React.FC<TeachModeViewProps> = ({
     }
   };
 
+  const removeStep = async (eventId: string) => {
+    if (!active) return;
+    try {
+      const updated = await api.deleteTeachStep(active.id, eventId);
+      setActive(updated);
+      setSessions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+    } catch (err) {
+      onNotify("Could not remove step", err instanceof Error ? err.message : undefined, "error");
+    }
+  };
+
   const captureCurrentApp = async () => {
     if (!active || active.status !== "recording") return;
     setBusy(true);
@@ -112,6 +166,7 @@ export const TeachModeView: React.FC<TeachModeViewProps> = ({
     try {
       const stopped = await api.stopTeachSession(active.id);
       setActive(stopped);
+      onRecordingChange(null);
       setSessions((prev) => prev.map((s) => (s.id === stopped.id ? stopped : s)));
       onNotify(
         "Recording stopped",
@@ -132,6 +187,7 @@ export const TeachModeView: React.FC<TeachModeViewProps> = ({
       onWorkflowCreated(wf);
       const updated = { ...active, status: "converted" as const, workflow_id: wf.id };
       setActive(updated);
+      onRecordingChange(null);
       setSessions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
       onNotify("Reusable workflow created", `Saved '${wf.name}' to Workflow Studio.`, "success");
     } catch (err) {
@@ -149,8 +205,8 @@ export const TeachModeView: React.FC<TeachModeViewProps> = ({
         <div>
           <h1 className="page-title">Teach Mode</h1>
           <p className="page-subtitle">
-            Demonstrate a repetitive desktop or folder task once, extract semantic steps and
-            variables, and turn it into a reusable workflow without writing code.
+            Demonstrate a repetitive workflow across permitted external applications and folders,
+            inspect semantic steps, and synthesize a reusable approval-gated automation.
           </p>
         </div>
         <StatusTag
@@ -163,13 +219,13 @@ export const TeachModeView: React.FC<TeachModeViewProps> = ({
       <div className="operator-grid">
         <section className="panel" aria-label="Teach Mode recording workspace">
           <div className="panel-header">
-            <h2 className="panel-title">1. Record Permitted Demonstration</h2>
+            <h2 className="panel-title">1. Choose Permitted Recording Scope</h2>
           </div>
 
-          <div className="flex-row flex-wrap">
-            <div className="field" style={{ flex: "1 1 240px" }}>
+          <div className="two-col">
+            <div className="field">
               <label htmlFor="teach-session-name" className="field-label">
-                Demonstration Name
+                Workflow Name
               </label>
               <input
                 id="teach-session-name"
@@ -179,60 +235,99 @@ export const TeachModeView: React.FC<TeachModeViewProps> = ({
                 onChange={(e) => setSessionName(e.target.value)}
               />
             </div>
-            <div style={{ alignSelf: "flex-end" }}>
-              {!isRecording ? (
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  disabled={busy}
-                  onClick={() => void startRecording()}
-                >
-                  <Circle size={14} aria-hidden="true" />
-                  <span>Start Recording</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="btn btn-danger"
-                  disabled={busy}
-                  onClick={() => void stopRecording()}
-                >
-                  <Square size={14} aria-hidden="true" />
-                  <span>Stop Recording</span>
-                </button>
-              )}
+
+            <div className="field">
+              <label htmlFor="teach-scope-app" className="field-label">
+                External Application Scope
+              </label>
+              <select
+                id="teach-scope-app"
+                className="select"
+                disabled={isRecording}
+                value={scopeApp}
+                onChange={(e) => setScopeApp(e.target.value)}
+              >
+                <option value="">Any permitted external app</option>
+                {runningApps.map((appName) => (
+                  <option key={appName} value={appName}>
+                    {appName}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
-          <div className="panel-subtle list-stack" style={{ gap: 12 }}>
-            <div className="field-label">
-              Perform Semantic Steps (recorded only while session is active)
+          <div className="two-col">
+            <div className="field">
+              <label htmlFor="teach-dir" className="field-label">
+                Scoped Folder to Watch &amp; Parameterize
+              </label>
+              <input
+                id="teach-dir"
+                className="input mono"
+                disabled={isRecording}
+                value={targetDir}
+                onChange={(e) => setTargetDir(e.target.value)}
+              />
             </div>
-            <div className="two-col">
-              <div className="field">
-                <label htmlFor="teach-dir" className="text-sm">
-                  Folder Parameter
-                </label>
-                <input
-                  id="teach-dir"
-                  className="input mono"
-                  value={targetDir}
-                  onChange={(e) => setTargetDir(e.target.value)}
-                />
-              </div>
-              <div className="field">
-                <label htmlFor="teach-url" className="text-sm">
-                  Web URL Parameter
-                </label>
-                <input
-                  id="teach-url"
-                  className="input mono"
-                  value={targetUrl}
-                  onChange={(e) => setTargetUrl(e.target.value)}
-                />
-              </div>
+            <div className="field">
+              <label htmlFor="teach-url" className="field-label">
+                Web URL Parameter (optional)
+              </label>
+              <input
+                id="teach-url"
+                className="input mono"
+                value={targetUrl}
+                onChange={(e) => setTargetUrl(e.target.value)}
+              />
             </div>
+          </div>
 
+          <div className="flex-row justify-between flex-wrap">
+            <label className="flex-row text-sm">
+              <input
+                type="checkbox"
+                checked={enableLiveObserver}
+                disabled={isRecording}
+                onChange={(e) => setEnableLiveObserver(e.target.checked)}
+              />
+              <span>
+                Observe external app switches &amp; scoped folder changes automatically while
+                recording
+              </span>
+            </label>
+
+            {!isRecording ? (
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={busy}
+                onClick={() => void startRecording()}
+              >
+                <Circle size={14} aria-hidden="true" />
+                <span>Start Recording</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-danger"
+                disabled={busy}
+                onClick={() => void stopRecording()}
+              >
+                <Square size={14} aria-hidden="true" />
+                <span>Stop Recording</span>
+              </button>
+            )}
+          </div>
+
+          {active?.observer_note && (
+            <div className="panel-subtle text-sm text-muted">{active.observer_note}</div>
+          )}
+
+          <div className="panel-subtle list-stack" style={{ gap: 10 }}>
+            <div className="field-label">
+              Explicit Semantic Actions (combine with live external app observation)
+            </div>
             <div className="flex-row flex-wrap">
               <button
                 type="button"
@@ -337,15 +432,15 @@ export const TeachModeView: React.FC<TeachModeViewProps> = ({
               <div className="state-box">
                 <strong>No demonstration steps captured yet.</strong>
                 <p className="text-sm text-muted">
-                  Click Start Recording above, record two or more semantic actions, then stop to
-                  synthesize a parameterized workflow.
+                  Click Start Recording, switch to your target external app (such as TextEdit or
+                  Finder) or trigger semantic actions above, then stop to review and synthesize.
                 </p>
               </div>
             ) : (
               <ol style={{ listStyle: "none", padding: 0 }} className="list-stack">
                 {active.events.map((evt, idx) => (
                   <li key={evt.id} className="list-row">
-                    <div>
+                    <div style={{ minWidth: 0 }}>
                       <div className="flex-row">
                         <span className="kbd-cap tabular">{idx + 1}</span>
                         <strong>{evt.summary}</strong>
@@ -354,11 +449,21 @@ export const TeachModeView: React.FC<TeachModeViewProps> = ({
                         Selector: {evt.selector}
                       </div>
                     </div>
-                    <StatusTag
-                      tone={evt.redacted ? "warning" : "success"}
-                      kind={evt.redacted ? "shield" : "check"}
-                      label={evt.redacted ? "Redacted secret" : evt.kind.replace(/_/g, " ")}
-                    />
+                    <div className="flex-row">
+                      <StatusTag
+                        tone={evt.redacted ? "warning" : "success"}
+                        kind={evt.redacted ? "shield" : "check"}
+                        label={evt.redacted ? "Redacted secret" : evt.kind.replace(/_/g, " ")}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-icon"
+                        aria-label={`Remove recorded step ${idx + 1}`}
+                        onClick={() => void removeStep(evt.id)}
+                      >
+                        <Trash2 size={14} aria-hidden="true" />
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ol>
@@ -367,7 +472,7 @@ export const TeachModeView: React.FC<TeachModeViewProps> = ({
 
           {active && active.status !== "recording" && active.events.some((e) => !e.redacted) && (
             <div className="panel-subtle list-stack" style={{ gap: 12 }}>
-              <h3 className="panel-title">3. Parameterize &amp; Convert</h3>
+              <h3 className="panel-title">3. Parameterize, Convert &amp; Test Replay</h3>
               {active.extracted_variables.length > 0 && (
                 <div className="flex-row flex-wrap">
                   {active.extracted_variables.map((v) => (
@@ -404,7 +509,7 @@ export const TeachModeView: React.FC<TeachModeViewProps> = ({
                       onClick={() => void onTestWorkflow(convertedWf)}
                     >
                       <Play size={14} aria-hidden="true" />
-                      <span>Test Run Workflow</span>
+                      <span>Test Dry-Run Replay</span>
                     </button>
                   </>
                 )}
@@ -416,16 +521,16 @@ export const TeachModeView: React.FC<TeachModeViewProps> = ({
         <aside className="panel" aria-label="Teach Mode privacy guarantees and sessions">
           <div className="flex-row">
             <ShieldCheck size={17} aria-hidden="true" />
-            <h2 className="panel-title">Privacy Boundaries</h2>
+            <h2 className="panel-title">Privacy &amp; Safety Rules</h2>
           </div>
           <ul
             className="text-sm text-muted"
             style={{ paddingInlineStart: 18, display: "flex", flexDirection: "column", gap: 6 }}
           >
-            <li>Recording starts only when you click Start Recording.</li>
-            <li>Password fields, OTP prompts, and excluded apps are dropped automatically.</li>
-            <li>Prefers semantic accessibility and tool selectors over fragile pixel coordinates.</li>
-            <li>Every synthesized workflow inserts explicit approval gates before mutations.</li>
+            <li>External app observation activates ONLY after you click Start Recording.</li>
+            <li>A top banner remains visible with one-click Stop and Emergency Stop integration.</li>
+            <li>Passwords, OTP/2FA, payment windows, and excluded apps are never recorded.</li>
+            <li>Prefers semantic accessibility &amp; filesystem selectors over pixel coordinates.</li>
           </ul>
 
           <div className="list-stack" style={{ marginTop: 8 }}>

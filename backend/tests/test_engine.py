@@ -271,3 +271,77 @@ async def test_emergency_stop_and_mcp_boundaries(test_app):
             )
         ).json()
         assert "error" in mcp_blocked
+
+
+@pytest.mark.asyncio
+async def test_desktop_control_external_demo_and_teach_step_edit(test_app):
+    app, _, headers = test_app
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        # Running apps & accessibility endpoints respect excluded sensitive apps
+        running = await client.get("/api/system/running-apps", headers=headers)
+        assert running.status_code == 200
+        assert isinstance(running.json(), list)
+
+        ax_blocked = (
+            await client.get("/api/system/accessibility?app_name=1Password", headers=headers)
+        ).json()
+        assert ax_blocked["blocked_by_privacy"] is True
+        assert ax_blocked["elements"] == []
+
+        # External app demo setup produces valid structured plan with approval gates
+        ext_demo = (await client.post("/api/demo/setup-external-app", headers=headers)).json()
+        assert Path(ext_demo["directory"]).exists()
+        task = (
+            await client.post(
+                "/api/tasks",
+                headers=headers,
+                json={"prompt": ext_demo["prompt"], "target_directory": ext_demo["directory"]},
+            )
+        ).json()
+        tools = [s["tool"] for s in task["steps"]]
+        assert "apps.list_running" in tools
+        assert "apps.open_document" in tools
+        assert "desktop.inspect_accessibility" in tools
+        # Stop before launching TextEdit during unit test
+        await client.post(f"/api/tasks/{task['id']}/cancel", headers=headers)
+
+        # Teach Mode supports scope parameters, step deletion, and observer cleanup
+        sess = (
+            await client.post(
+                "/api/teach/sessions",
+                headers=headers,
+                json={
+                    "name": "Scoped External Demo",
+                    "scope_app": "TextEdit",
+                    "enable_live_observer": False,
+                },
+            )
+        ).json()
+        assert sess["scope_app"] == "TextEdit"
+        after_step = (
+            await client.post(
+                f"/api/teach/sessions/{sess['id']}/step",
+                headers=headers,
+                json={
+                    "kind": "app_focus",
+                    "summary": "Switch to TextEdit",
+                    "selector": "ax://application[@name='TextEdit']",
+                    "app_name": "TextEdit",
+                    "parameters": {"app_name": "TextEdit"},
+                },
+            )
+        ).json()
+        ev_id = after_step["events"][0]["id"]
+        after_del = (
+            await client.delete(
+                f"/api/teach/sessions/{sess['id']}/step/{ev_id}", headers=headers
+            )
+        ).json()
+        assert len(after_del["events"]) == 0
+
+        # Provider list includes model capabilities and honest reachability
+        provs = (await client.get("/api/providers", headers=headers)).json()
+        openai_p = next(p for p in provs if p["id"] == "openai")
+        assert "model_capabilities" in openai_p
+        assert openai_p["reachable"] is False

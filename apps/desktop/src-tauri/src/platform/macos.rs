@@ -1,6 +1,8 @@
 use std::process::Command;
 
-use super::{validate_app_identifier, ActiveWindowSnapshot, CapabilityEntry, DisplayInfo, PlatformAdapter};
+use super::{
+    validate_app_identifier, ActiveWindowSnapshot, CapabilityEntry, DisplayInfo, PlatformAdapter,
+};
 
 #[link(name = "ApplicationServices", kind = "framework")]
 extern "C" {
@@ -16,16 +18,47 @@ pub struct MacOsAdapter;
 
 impl MacOsAdapter {
     fn accessibility_trusted() -> bool {
-        // Safe read-only macOS TCC trust query; never prompts or bypasses permissions.
         unsafe { AXIsProcessTrusted() }
     }
 
     fn screen_recording_granted() -> bool {
         unsafe { CGPreflightScreenCaptureAccess() }
     }
+
+    fn frontmost_app_via_lsappinfo() -> Option<String> {
+        let front = Command::new("lsappinfo").arg("front").output().ok()?;
+        if !front.status.success() {
+            return None;
+        }
+        let asn = String::from_utf8_lossy(&front.stdout).trim().to_string();
+        if asn.is_empty() {
+            return None;
+        }
+        let info = Command::new("lsappinfo")
+            .args(["info", "-only", "name", &asn])
+            .output()
+            .ok()?;
+        if !info.status.success() {
+            return None;
+        }
+        let text = String::from_utf8_lossy(&info.stdout);
+        for line in text.lines() {
+            if let Some((_, rhs)) = line.split_once('=') {
+                let clean = rhs.trim().trim_matches('"').to_string();
+                if !clean.is_empty() {
+                    return Some(clean);
+                }
+            }
+        }
+        None
+    }
 }
 
 impl PlatformAdapter for MacOsAdapter {
+    fn platform_id(&self) -> &'static str {
+        "macos"
+    }
+
     fn desktop_environment(&self) -> (String, String) {
         ("macOS Aqua".to_string(), "Quartz Compositor".to_string())
     }
@@ -66,7 +99,8 @@ impl PlatformAdapter for MacOsAdapter {
                 if let Ok(val) = serde_json::from_slice::<serde_json::Value>(&out.stdout) {
                     if let Some(gpus) = val.get("SPDisplaysDataType").and_then(|v| v.as_array()) {
                         for gpu in gpus {
-                            if let Some(ndrv) = gpu.get("spdisplays_ndrvs").and_then(|v| v.as_array()) {
+                            if let Some(ndrv) = gpu.get("spdisplays_ndrvs").and_then(|v| v.as_array())
+                            {
                                 for d in ndrv {
                                     let name = d
                                         .get("_name")
@@ -130,39 +164,48 @@ impl PlatformAdapter for MacOsAdapter {
                 name: "macOS Accessibility API".into(),
                 category: "os".into(),
                 status: if ax { "available" } else { "permission_required" }.into(),
+                maturity: "implemented_tested".into(),
                 detail: if ax {
-                    "Accessibility permission granted for semantic UI tree inspection.".into()
+                    "Accessibility permission granted for semantic UI tree inspection and controlled input."
+                        .into()
                 } else {
-                    "Grant Accessibility in System Settings > Privacy & Security to enable semantic UI control.".into()
+                    "Grant Accessibility in System Settings > Privacy & Security to enable semantic UI control."
+                        .into()
                 },
-                platform_note: Some("Checked via AXIsProcessTrusted; OmniDesk never bypasses TCC.".into()),
+                platform_note: Some("Verified via AXIsProcessTrusted; OmniDesk never bypasses TCC.".into()),
             },
             CapabilityEntry {
                 id: "macos.screen_capture".into(),
                 name: "ScreenCaptureKit / Screen Recording".into(),
                 category: "vision".into(),
                 status: if screen { "available" } else { "permission_required" }.into(),
+                maturity: "implemented_tested".into(),
                 detail: if screen {
-                    "Screen Recording permission granted for explicit opt-in workspace snapshots.".into()
+                    "Screen Recording granted for explicit opt-in Live Workspace snapshots.".into()
                 } else {
-                    "Grant Screen Recording in System Settings > Privacy & Security when you want Live Workspace previews.".into()
+                    "Grant Screen Recording in System Settings > Privacy & Security for opt-in Live Workspace previews."
+                        .into()
                 },
-                platform_note: Some("Capture runs only when explicitly requested by the user.".into()),
+                platform_note: Some("Single-shot capture runs only on explicit user action.".into()),
             },
             CapabilityEntry {
                 id: "macos.keychain".into(),
                 name: "macOS Keychain Credential Store".into(),
                 category: "security".into(),
                 status: "available".into(),
-                detail: "API provider credentials are stored in macOS Keychain via Security framework.".into(),
+                maturity: "implemented_tested".into(),
+                detail: "API provider credentials are stored in macOS Keychain via Security framework."
+                    .into(),
                 platform_note: None,
             },
             CapabilityEntry {
                 id: "macos.app_launch".into(),
-                name: "Native Application Launcher".into(),
+                name: "Native App Launcher & Process Recognition".into(),
                 category: "automation".into(),
                 status: "available".into(),
-                detail: "Opens installed macOS applications using LaunchServices (`open -a`).".into(),
+                maturity: "implemented_tested".into(),
+                detail: "Lists running GUI apps via LaunchServices (`lsappinfo`) and opens/focuses apps via `open -a`."
+                    .into(),
                 platform_note: None,
             },
         ]
@@ -183,32 +226,73 @@ impl PlatformAdapter for MacOsAdapter {
 
     fn active_window(&self) -> ActiveWindowSnapshot {
         let ax = Self::accessibility_trusted();
-        let output = Command::new("osascript")
-            .args([
-                "-e",
-                "tell application \"System Events\" to get name of first application process whose frontmost is true",
-            ])
-            .output();
-        match output {
-            Ok(out) if out.status.success() => {
-                let app = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                ActiveWindowSnapshot {
-                    app_name: if app.is_empty() { "Unknown".into() } else { app },
-                    window_title: if ax {
-                        "Frontmost window accessible".into()
-                    } else {
-                        "Window title requires macOS Accessibility permission".into()
-                    },
-                    accessibility_available: ax,
-                    note: "Collected on demand without background surveillance.".into(),
+        let app = Self::frontmost_app_via_lsappinfo().unwrap_or_else(|| "Unknown".into());
+        let window_title = if ax {
+            Command::new("osascript")
+                .args([
+                    "-e",
+                    "tell application \"System Events\" to get title of front window of first application process whose frontmost is true",
+                ])
+                .output()
+                .ok()
+                .filter(|o| o.status.success())
+                .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| "Active window (no title reported)".into())
+        } else {
+            "Window title & element tree require macOS Accessibility permission".into()
+        };
+
+        ActiveWindowSnapshot {
+            app_name: app,
+            window_title,
+            accessibility_available: ax,
+            note: "Frontmost application identified via LaunchServices without background surveillance."
+                .into(),
+        }
+    }
+
+    fn list_running_apps(&self) -> Vec<String> {
+        let output = Command::new("lsappinfo")
+            .arg("visibleProcessList")
+            .output()
+            .ok();
+        let mut apps = Vec::new();
+        if let Some(out) = output {
+            if out.status.success() {
+                let raw = String::from_utf8_lossy(&out.stdout);
+                for token in raw.split('"').skip(1).step_by(2) {
+                    let clean = token.replace('_', " ").trim().to_string();
+                    if !clean.is_empty() && !apps.contains(&clean) {
+                        apps.push(clean);
+                    }
                 }
             }
-            _ => ActiveWindowSnapshot {
-                app_name: "Permission required".into(),
-                window_title: "Grant Automation / Accessibility permission in System Settings".into(),
-                accessibility_available: ax,
-                note: "macOS blocked Apple Events query until user authorizes System Events.".into(),
-            },
+        }
+        apps
+    }
+
+    fn open_permission_settings(&self, pane: &str) -> Result<String, String> {
+        let url = match pane {
+            "accessibility" => {
+                "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+            }
+            "screen_recording" => {
+                "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
+            }
+            "automation" => {
+                "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation"
+            }
+            _ => return Err(format!("Unsupported macOS privacy pane: {pane}")),
+        };
+        let status = Command::new("open")
+            .arg(url)
+            .status()
+            .map_err(|e| format!("Failed to open System Settings: {e}"))?;
+        if status.success() {
+            Ok(format!("Opened macOS System Settings ({pane})."))
+        } else {
+            Err("Could not open macOS System Settings.".into())
         }
     }
 }

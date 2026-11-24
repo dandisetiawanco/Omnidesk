@@ -40,6 +40,22 @@ export interface DemoSandboxInfo {
   prompt: string;
 }
 
+export interface ExternalAppDemoInfo {
+  directory: string;
+  app_name: string;
+  prompt: string;
+}
+
+export interface AccessibilityTreeResult {
+  app_name: string;
+  window_title?: string;
+  accessibility_granted: boolean;
+  blocked_by_privacy: boolean;
+  element_count?: number;
+  elements: Array<{ role: string; name: string; selector: string }>;
+  message: string;
+}
+
 class OmniDeskApiClient {
   private baseUrl = "http://127.0.0.1:17420";
   private token = "";
@@ -100,8 +116,33 @@ class OmniDeskApiClient {
     return this.request("/api/system/profile");
   }
 
-  getActiveWindow(): Promise<{ platform: string; app_name: string; status: string; note: string }> {
+  getActiveWindow(): Promise<{
+    platform: string;
+    app_name: string;
+    window_title?: string;
+    accessibility_granted?: boolean;
+    status: string;
+    note: string;
+  }> {
     return this.request("/api/system/active-window");
+  }
+
+  listRunningApps(): Promise<Array<{ name: string; platform: string }>> {
+    return this.request("/api/system/running-apps");
+  }
+
+  inspectAccessibilityTree(appName?: string): Promise<AccessibilityTreeResult> {
+    const q = appName ? `?app_name=${encodeURIComponent(appName)}` : "";
+    return this.request(`/api/system/accessibility${q}`);
+  }
+
+  openPermissionSettings(pane: "accessibility" | "screen_recording" | "automation"): Promise<{
+    opened: boolean;
+    pane: string;
+    platform: string;
+    note?: string;
+  }> {
+    return this.request(`/api/system/open-permissions/${pane}`, { method: "POST" });
   }
 
   captureLiveSnapshot(): Promise<LiveSnapshotResult> {
@@ -151,6 +192,8 @@ class OmniDeskApiClient {
     target_directory?: string;
     dry_run_only?: boolean;
     provider_id?: string;
+    attached_app?: string;
+    attached_url?: string;
   }): Promise<TaskRun> {
     return this.request("/api/tasks", {
       method: "POST",
@@ -198,6 +241,10 @@ class OmniDeskApiClient {
     return this.request("/api/demo/setup-downloads", { method: "POST" });
   }
 
+  setupExternalAppDemo(): Promise<ExternalAppDemoInfo> {
+    return this.request("/api/demo/setup-external-app", { method: "POST" });
+  }
+
   listAudit(): Promise<AuditEntry[]> {
     return this.request("/api/audit");
   }
@@ -232,10 +279,21 @@ class OmniDeskApiClient {
     return this.request("/api/teach/sessions");
   }
 
-  startTeachSession(name: string): Promise<TeachSession> {
+  startTeachSession(payload: {
+    name: string;
+    scope_app?: string;
+    scope_directory?: string;
+    enable_live_observer?: boolean;
+  }): Promise<TeachSession> {
     return this.request("/api/teach/sessions", {
       method: "POST",
-      body: JSON.stringify({ name }),
+      body: JSON.stringify(payload),
+    });
+  }
+
+  deleteTeachStep(sessionId: string, eventId: string): Promise<TeachSession> {
+    return this.request(`/api/teach/sessions/${sessionId}/step/${eventId}`, {
+      method: "DELETE",
     });
   }
 

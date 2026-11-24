@@ -121,7 +121,63 @@ class TaskPlanner:
                 return title, validated_steps, source, target_directory
 
         # Deterministic local structured planner (works offline with zero cloud dependency).
-        # 1. Flagship file organization + duplicate scan + Excel/Markdown report
+        # 1. Reproducible external application automation (create brief + open in native app + verify)
+        if any(kw in lower for kw in ("textedit", "notepad", "external app", "accessibility tree", "inspect window")):
+            directory = _extract_target_directory(clean_prompt, target_directory)
+            app_name = "TextEdit" if "textedit" in lower else ("Notepad" if "notepad" in lower else "TextEdit")
+            if "accessibility" in lower and "brief" not in lower and "create" not in lower:
+                steps = [
+                    _make_step(
+                        0,
+                        "List visible running GUI applications",
+                        "apps.list_running",
+                        {},
+                    ),
+                    _make_step(
+                        1,
+                        "Inspect frontmost window and OS accessibility tree",
+                        "desktop.inspect_accessibility",
+                        {},
+                    ),
+                ]
+                return "Inspect Active App & Accessibility", steps, "local_deterministic_planner", None
+
+            brief_file = str(Path(directory) / "OmniDesk_Automation_Brief.txt")
+            steps = [
+                _make_step(
+                    0,
+                    "Verify running desktop applications before launch",
+                    "apps.list_running",
+                    {},
+                ),
+                _make_step(
+                    1,
+                    "Generate verified automation brief document in sandbox",
+                    "documents.generate_summary",
+                    {
+                        "directory": directory,
+                        "title": "OmniDesk External Application Automation Brief",
+                        "filename": "OmniDesk_Automation_Brief.txt",
+                    },
+                    force_approval=True,
+                ),
+                _make_step(
+                    2,
+                    f"Open verified brief in native {app_name} application",
+                    "apps.open_document",
+                    {"app_name": app_name, "file_path": brief_file, "directory": directory},
+                    force_approval=True,
+                ),
+                _make_step(
+                    3,
+                    f"Verify {app_name} window & accessibility state",
+                    "desktop.inspect_accessibility",
+                    {"app_name": app_name},
+                ),
+            ]
+            return f"External App Automation ({app_name})", steps, "local_deterministic_planner", directory
+
+        # 2. Flagship file organization + duplicate scan + Excel/Markdown report
         if any(kw in lower for kw in ("organize", "sort files", "categorize", "duplicate", "excel", "spreadsheet")):
             directory = _extract_target_directory(clean_prompt, target_directory)
             wants_excel = any(kw in lower for kw in ("excel", "xlsx", "spreadsheet", "report"))
