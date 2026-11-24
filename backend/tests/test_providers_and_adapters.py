@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import platform
 from pathlib import Path
 from typing import Any
 
@@ -8,8 +9,10 @@ import pytest
 
 from omnidesk_engine.automation.desktop_control import is_excluded_or_sensitive, linux_is_wayland
 from omnidesk_engine.db import Database
+from omnidesk_engine.intelligence.orchestrator import create_external_app_demo_sandbox
 from omnidesk_engine.intelligence.planner import TaskPlanner
 from omnidesk_engine.providers.registry import (
+    PROVIDER_CATALOG,
     ProviderRegistry,
     detect_model_capabilities,
     estimate_cost_usd,
@@ -118,3 +121,65 @@ def test_sensitive_app_and_wayland_detection(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.delenv("XDG_SESSION_TYPE", raising=False)
     monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
     assert linux_is_wayland() is False
+
+
+@pytest.mark.parametrize(
+    ("os_name", "expected_app"),
+    [
+        ("Darwin", "TextEdit"),
+        ("Windows", "Notepad"),
+        ("Linux", "Text Editor"),
+    ],
+)
+def test_external_app_demo_planning_across_operating_systems(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    os_name: str,
+    expected_app: str,
+) -> None:
+    monkeypatch.setitem(PROVIDER_CATALOG["ollama"], "default_url", "http://127.0.0.1:1")
+    monkeypatch.setattr(platform, "system", lambda: os_name)
+
+    db = Database(tmp_path / f"test_{os_name.lower()}.db")
+    vault = CredentialVault()
+    reg = ProviderRegistry(db, vault)
+    planner = TaskPlanner(reg)
+
+    demo = create_external_app_demo_sandbox(tmp_path)
+    assert demo["app_name"] == expected_app
+
+    title, steps, source, scope, _usage, _note = asyncio.run(
+        planner.build_plan(demo["prompt"], target_directory=demo["directory"])
+    )
+    assert source == "local_deterministic_planner"
+    assert title == f"External App Automation ({expected_app})"
+    assert scope == demo["directory"]
+    assert [s.tool for s in steps] == [
+        "apps.list_running",
+        "documents.generate_summary",
+        "apps.open_document",
+        "desktop.inspect_accessibility",
+    ]
+    assert steps[1].requires_approval is True
+    assert steps[2].requires_approval is True
+    assert steps[2].parameters["app_name"] == expected_app
+    assert steps[3].parameters["app_name"] == expected_app
+
+
+def test_accessibility_state_only_prompt_plans_read_only_inspection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setitem(PROVIDER_CATALOG["ollama"], "default_url", "http://127.0.0.1:1")
+    db = Database(tmp_path / "test_ax.db")
+    planner = TaskPlanner(ProviderRegistry(db, CredentialVault()))
+
+    title, steps, source, _scope, _usage, _note = asyncio.run(
+        planner.build_plan("Inspect accessibility state for the active window")
+    )
+    assert source == "local_deterministic_planner"
+    assert title == "Inspect Active App & Accessibility"
+    assert [s.tool for s in steps] == [
+        "apps.list_running",
+        "desktop.inspect_accessibility",
+    ]
+    assert all(s.requires_approval is False for s in steps)

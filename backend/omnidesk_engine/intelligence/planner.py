@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import platform
 import re
 import uuid
 from pathlib import Path
@@ -36,6 +37,21 @@ def _extract_app_name(prompt: str) -> str:
         if candidate:
             return candidate
     return "Calculator"
+
+
+def _resolve_external_app_name(lower_prompt: str) -> str:
+    if "textedit" in lower_prompt:
+        return "TextEdit"
+    if "notepad" in lower_prompt:
+        return "Notepad"
+    if "text editor" in lower_prompt:
+        return "Text Editor"
+    system = platform.system()
+    if system == "Darwin":
+        return "TextEdit"
+    if system == "Windows":
+        return "Notepad"
+    return "Text Editor"
 
 
 def _make_step(
@@ -168,9 +184,21 @@ class TaskPlanner:
 
         # Deterministic local structured planner (clearly labeled fallback when model unavailable or rejected).
         # 1. Reproducible external application automation (create brief + open in native app + verify)
-        if any(kw in lower for kw in ("textedit", "notepad", "external app", "accessibility tree", "inspect window")):
+        if any(
+            kw in lower
+            for kw in (
+                "textedit",
+                "text editor",
+                "notepad",
+                "external app",
+                "external-app-demo",
+                "accessibility tree",
+                "accessibility state",
+                "inspect window",
+            )
+        ):
             directory = _extract_target_directory(clean_prompt, target_directory)
-            app_name = "TextEdit" if "textedit" in lower else ("Notepad" if "notepad" in lower else "TextEdit")
+            app_name = _resolve_external_app_name(lower)
             if "accessibility" in lower and "brief" not in lower and "create" not in lower:
                 steps = [
                     _make_step(0, "List visible running GUI applications", "apps.list_running", {}),
