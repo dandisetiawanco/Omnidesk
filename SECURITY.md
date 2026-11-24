@@ -1,19 +1,23 @@
 # Security Policy
 
-Security is a foundational design requirement in OmniDesk, not an optional feature.
+Security is a core architectural boundary in OmniDesk. While no desktop automation software that interacts with local files, browsers, and operating system accessibility APIs can guarantee zero risk, OmniDesk applies layered defense-in-depth controls to keep every action visible, scoped, and user-controlled.
 
-## Core Security Controls
+## Implemented Security Controls
 
-1. **Deny-by-default permissions**: Every tool belongs to an explicit risk tier (`read_only`, `reversible_modification`, `sensitive_access`, `external_communication`, `destructive`, `privileged_system`). Unregistered tools default to `privileged_system` and are blocked.
-2. **Mandatory human confirmation**: Moving or creating files, generating reports, launching native applications, accessing the clipboard, or opening external browser URLs pause for explicit approval with a dry-run preview.
-3. **Authenticated loopback transport**: The local FastAPI engine binds strictly to `127.0.0.1` and requires a per-session 256-bit cryptographically random Bearer token (`OMNIDESK_SESSION_TOKEN`) validated in constant time (`hmac.compare_digest`). Tokens are passed via child process environment variables, never via CLI arguments or query parameters.
-4. **Zero plaintext credentials**: Provider API keys are stored exclusively in the host operating system credential store (macOS Keychain, Windows Credential Manager, Linux Secret Service). Keys are never written to `.env`, SQLite, JSON config files, frontend bundles, or logs.
-5. **Scoped filesystem boundaries**: Every path is resolved via `Path.resolve()` to prevent symlink and `..` traversal escapes. Protected directories (`/System`, `/etc`, `/usr`, `/bin`, `/sbin`, `~/.ssh`, `~/.aws`, `~/.gnupg`, `C:\Windows\System32`) are unconditionally denied.
-6. **Prompt-injection isolation**: Filenames, document contents, and Playwright webpage excerpts are treated strictly as untrusted data, scanned for injection patterns, redacted for secrets, and wrapped in non-instructional delimiters before any model call.
-7. **Strict Tauri capabilities & CSP**: `tauri.conf.json` enforces `script-src 'self'`, `object-src 'none'`, and least-privilege plugin permissions without exposing arbitrary shell execution to the webview.
-8. **No silent surveillance or privilege elevation**: OmniDesk never requests administrator/root privileges by default, never installs hidden background keyloggers, and never bypasses macOS TCC or Linux Wayland portal restrictions.
-9. **Bounded execution & Emergency Stop**: Every task enforces step caps, per-step timeouts, sliding-window rate limits, bounded workflow loop counts (`<= 100`), and an always-reachable Emergency Stop trigger.
+1. **Deny-by-default tool policy**: Every executable action must be registered in `backend/omnidesk_engine/security/policy.py` under one of six risk tiers (`read_only`, `reversible_modification`, `sensitive_access`, `external_communication`, `destructive`, `privileged_system`). Unregistered tools default to `privileged_system` and are blocked.
+2. **Outside-the-model plan validation**: Structured JSON plans returned by local or cloud AI models are strictly validated before execution. Unknown tools, shell commands, destructive requests, file moves lacking a prior dry-run plan, or incomplete parameters are rejected cleanly.
+3. **Mandatory human approval**: Modifying files, generating documents or spreadsheets, launching applications, clicking/typing in external apps, or visiting external URLs pause in `awaiting_approval` with a dry-run preview until explicitly approved by the user.
+4. **Authenticated loopback IPC**: The local FastAPI backend binds strictly to `127.0.0.1` and requires a per-session 256-bit cryptographically random Bearer token (`OMNIDESK_SESSION_TOKEN`) verified in constant time (`hmac.compare_digest`). Session tokens are passed via process environment variables, never CLI arguments or URL query strings.
+5. **OS credential vault storage**: Cloud provider API keys are stored exclusively in the host operating system credential store (macOS Keychain, Windows Credential Manager, or Linux Secret Service). Keys are never persisted to `.env`, SQLite, JSON config files, frontend storage, or logs.
+6. **Scoped filesystem boundaries**: Paths are canonicalized with `Path.resolve()` to block `..` traversal and symlink escapes. Protected system and credential paths (`/System`, `/etc`, `/usr`, `/bin`, `/sbin`, `~/.ssh`, `~/.aws`, `~/.gnupg`, `C:\Windows\System32`) are unconditionally denied.
+7. **Sensitive application and password field refusal**: Password managers and sensitive window titles are excluded by default (`1Password`, `Bitwarden`, `Keychain Access`, `KeePassXC`, banking/login/OTP titles). Semantic adapters explicitly skip password inputs (`AXSecureTextField` on macOS, `IsPassword` on Windows UIA, `ROLE_PASSWORD_TEXT` on Linux AT-SPI2).
+8. **Prompt-injection isolation**: External filenames, document text, and browser DOM content are treated as untrusted data, scanned for injection cues, redacted for common secret patterns, and separated from planner instructions.
+9. **Reversible rollback and Emergency Stop**: Approved file moves record SHA-256 digests in an operation journal for verified rollback. Emergency Stop immediately cancels running tasks, stops Teach Mode observers, and aborts active AI inference connections.
+10. **Strict Tauri CSP and platform respect**: `tauri.conf.json` enforces `script-src 'self'` and `object-src 'none'`. OmniDesk does not request administrator/root elevation by default and never bypasses macOS TCC or Linux Wayland security boundaries.
 
 ## Reporting a Vulnerability
 
-If you discover a security issue in OmniDesk, please report it privately to the maintainers at NGOPREK DIGITAL rather than opening a public issue with exploit details. Include reproduction steps, affected operating system, and impact assessment so we can verify and release a fix promptly.
+If you identify a security vulnerability in OmniDesk, please do **not** open a public issue with exploit details. Instead:
+
+- Use GitHub's private vulnerability reporting feature on `https://github.com/dandisetiawanco/Omnidesk/security` (when enabled), or contact the maintainer directly via https://www.dandisetiawan.id/.
+- Include clear reproduction steps, affected operating system and architecture, and potential security impact so the issue can be verified and patched responsibly.

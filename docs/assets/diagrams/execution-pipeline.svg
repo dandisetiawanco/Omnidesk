@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 380" width="1120" height="380" role="img" aria-labelledby="title desc">
+  <title id="title">OmniDesk AI Planning and Execution Pipeline</title>
+  <desc id="desc">Seven-stage execution lifecycle from natural-language request through AI planning, validation, security policy, user approval, native execution, and result verification with Emergency Stop and rollback.</desc>
+  <defs>
+    <style>
+      .bg { fill: #0E1116; stroke: #303A4A; stroke-width: 1.5; }
+      .node { fill: #161B22; stroke: #3A4659; stroke-width: 1.25; }
+      .gate { fill: #241D10; stroke: #D69E2E; stroke-width: 1.4; }
+      .sec { fill: #132238; stroke: #3B82F6; stroke-width: 1.4; }
+      .ok { fill: #122E24; stroke: #2F855A; stroke-width: 1.4; }
+      .stop { fill: #2D1418; stroke: #C92A2A; stroke-width: 1.3; }
+      .title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 18px; font-weight: 700; fill: #F0F4F8; }
+      .subtitle { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 12px; fill: #9BA7B8; }
+      .stepnum { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 10px; font-weight: 700; fill: #6CB6FF; }
+      .label { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 12px; font-weight: 650; fill: #F0F4F8; }
+      .body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 10px; fill: #9BA7B8; }
+      .warn-t { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 12px; font-weight: 650; fill: #F5B942; }
+      .ok-t { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 12px; font-weight: 650; fill: #4CD98D; }
+      .stop-t { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 11.5px; font-weight: 650; fill: #FF8787; }
+      .arrow { stroke: #6CB6FF; stroke-width: 1.6; fill: none; }
+      .dash { stroke: #68768A; stroke-width: 1.3; stroke-dasharray: 4 3; fill: none; }
+    </style>
+    <marker id="ah" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#6CB6FF" />
+    </marker>
+    <marker id="ah-d" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#68768A" />
+    </marker>
+  </defs>
+
+  <rect x="1" y="1" width="1118" height="378" rx="14" class="bg" />
+  <text x="32" y="38" class="title">AI Planning and Execution Pipeline</text>
+  <text x="32" y="56" class="subtitle">Every natural-language instruction is validated outside the model, scoped, approved by the user, and verified on completion</text>
+
+  <!-- Row 1: Steps 1 to 4 -->
+  <rect x="32" y="88" width="232" height="92" rx="9" class="node" />
+  <text x="46" y="108" class="stepnum">01  USER REQUEST</text>
+  <text x="46" y="128" class="label">Intent &amp; Scope Input</text>
+  <text x="46" y="146" class="body">Natural language prompt, target</text>
+  <text x="46" y="161" class="body">folder, app context, or workflow</text>
+
+  <line x1="264" y1="134" x2="294" y2="134" class="arrow" marker-end="url(#ah)" />
+
+  <rect x="298" y="88" width="236" height="92" rx="9" class="node" />
+  <text x="312" y="108" class="stepnum">02  AI PLANNING</text>
+  <text x="312" y="128" class="label">Structured JSON Plan</text>
+  <text x="312" y="146" class="body">Local Ollama (qwen2.5:1.5b) or</text>
+  <text x="312" y="161" class="body">opt-in Cloud model emits typed steps</text>
+
+  <line x1="534" y1="134" x2="564" y2="134" class="arrow" marker-end="url(#ah)" />
+
+  <rect x="568" y="88" width="236" height="92" rx="9" class="sec" />
+  <text x="582" y="108" class="stepnum">03  TOOL VALIDATION</text>
+  <text x="582" y="128" class="label">Schema &amp; Parameter Check</text>
+  <text x="582" y="146" class="body">Rejects unregistered tools, shell</text>
+  <text x="582" y="161" class="body">escapes, or incomplete parameters</text>
+
+  <line x1="804" y1="134" x2="834" y2="134" class="arrow" marker-end="url(#ah)" />
+
+  <rect x="838" y="88" width="250" height="92" rx="9" class="sec" />
+  <text x="852" y="108" class="stepnum">04  SECURITY POLICY</text>
+  <text x="852" y="128" class="label">Deny-by-Default Risk Tier</text>
+  <text x="852" y="146" class="body">Classifies 6 risk tiers, verifies</text>
+  <text x="852" y="161" class="body">scoped paths, blocks protected dirs</text>
+
+  <!-- Connector Step 4 down to Step 5 -->
+  <path d="M 963 180 L 963 204 L 148 204 L 148 228" class="arrow" marker-end="url(#ah)" />
+
+  <!-- Row 2: Steps 5 to 7 + Safety Controls -->
+  <rect x="32" y="232" width="248" height="94" rx="9" class="gate" />
+  <text x="46" y="252" class="stepnum">05  HUMAN APPROVAL GATE</text>
+  <text x="46" y="272" class="warn-t">Dry-Run Preview &amp; Consent</text>
+  <text x="46" y="290" class="body">Mutations pause in awaiting_approval</text>
+  <text x="46" y="305" class="body">for explicit user Approve / Deny</text>
+
+  <line x1="280" y1="279" x2="310" y2="279" class="arrow" marker-end="url(#ah)" />
+
+  <rect x="314" y="232" width="248" height="94" rx="9" class="node" />
+  <text x="328" y="252" class="stepnum">06  NATIVE EXECUTION</text>
+  <text x="328" y="272" class="label">Bounded Tool Runners</text>
+  <text x="328" y="290" class="body">Files, OpenPyXL, Playwright, OS</text>
+  <text x="328" y="305" class="body">Accessibility + SHA-256 journal</text>
+
+  <line x1="562" y1="279" x2="592" y2="279" class="arrow" marker-end="url(#ah)" />
+
+  <rect x="596" y="232" width="244" height="94" rx="9" class="ok" />
+  <text x="610" y="252" class="stepnum">07  RESULT VERIFICATION</text>
+  <text x="610" y="272" class="ok-t">Verified Output &amp; Audit</text>
+  <text x="610" y="290" class="body">Confirms artifacts on disk, logs</text>
+  <text x="610" y="305" class="body">audit trail, exposes Undo rollback</text>
+
+  <!-- Emergency Stop & Deterministic Fallback box -->
+  <rect x="862" y="232" width="226" height="94" rx="9" class="stop" />
+  <text x="876" y="254" class="stop-t">Runtime Safety Overrides</text>
+  <text x="876" y="274" class="body">• Emergency Stop cancels active</text>
+  <text x="876" y="288" class="body">  tasks, observers, and AI streams</text>
+  <text x="876" y="304" class="body">• Invalid AI plans fall back cleanly</text>
+  <text x="876" y="318" class="body">  to deterministic local planner</text>
+
+  <!-- Dashed fallback arrow from step 3 to right note -->
+  <line x1="686" y1="180" x2="686" y2="196" class="dash" />
+  <text x="32" y="356" class="body">Note: Read-only steps execute immediately within approved scope; modifying, app-launching, and external browser steps require explicit approval.</text>
+</svg>

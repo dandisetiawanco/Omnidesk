@@ -1,0 +1,58 @@
+name: Bug Report
+description: Report a reproducible bug in OmniDesk
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Concise description of the bug and what you expected instead.
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Operating System & Architecture
+      options:
+        - macOS (Intel x86_64)
+        - macOS (Apple Silicon arm64)
+        - Windows 11 (x64 / ARM64)
+        - Windows 10 (x64)
+        - Linux (X11)
+        - Linux (Wayland)
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Runtime Environment
+      description: OS version, RAM, and active AI provider (e.g., Ollama qwen2.5:1.5b, deterministic local, Gemini, OpenAI, Claude)
+      placeholder: "macOS 15.8.3, 8 GB RAM, Ollama qwen2.5:1.5b"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      placeholder: |
+        1. Launch OmniDesk with `pnpm dev:desktop`
+        2. Navigate to '...'
+        3. Run '...'
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized Error Output
+      description: Paste relevant console or backend errors with any personal file paths, tokens, or API keys removed.
+      render: text
+  - type: checkboxes
+    id: security_check
+    attributes:
+      label: Verification
+      options:
+        - label: I removed personal file paths, API keys, and tokens from this report.
+          required: true
+        - label: This is not a security vulnerability (report security issues privately per SECURITY.md).
+          required: true

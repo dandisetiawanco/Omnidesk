@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 470" width="1120" height="470" role="img" aria-labelledby="title desc">
+  <title id="title">Cross-Platform Native Adapter Architecture</title>
+  <desc id="desc">Shared OmniDesk core delegating OS operations to isolated macOS, Windows 10/11, and Linux X11/Wayland native adapters with honest verification statuses.</desc>
+  <defs>
+    <style>
+      .bg { fill: #0E1116; stroke: #303A4A; stroke-width: 1.5; }
+      .core { fill: #132238; stroke: #3B82F6; stroke-width: 1.35; }
+      .card { fill: #161B22; stroke: #3A4659; stroke-width: 1.25; }
+      .row { fill: #1C2330; stroke: #2E3848; stroke-width: 1; }
+      .title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 18px; font-weight: 700; fill: #F0F4F8; }
+      .subtitle { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 12px; fill: #9BA7B8; }
+      .heading { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 14px; font-weight: 700; fill: #F0F4F8; }
+      .label { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 11px; font-weight: 600; fill: #E2E8F0; }
+      .body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 10.5px; fill: #9BA7B8; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 10px; fill: #6CB6FF; }
+      .pill-v { fill: #122E24; stroke: #2F855A; stroke-width: 1; }
+      .pill-vt { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 10px; font-weight: 650; fill: #4CD98D; }
+      .pill-u { fill: #241D10; stroke: #D69E2E; stroke-width: 1; }
+      .pill-ut { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 10px; font-weight: 650; fill: #F5B942; }
+      .arrow { stroke: #6CB6FF; stroke-width: 1.6; fill: none; }
+    </style>
+    <marker id="ah" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#6CB6FF" />
+    </marker>
+  </defs>
+
+  <rect x="1" y="1" width="1118" height="468" rx="14" class="bg" />
+  <text x="32" y="38" class="title">Cross-Platform Native Adapter Architecture</text>
+  <text x="32" y="56" class="subtitle">Shared core interfaces keep OS-specific accessibility, credential vaults, and window materials strictly isolated</text>
+
+  <!-- Shared Core -->
+  <rect x="32" y="76" width="1056" height="72" rx="10" class="core" />
+  <text x="48" y="100" class="heading">Shared Application Core (Rust PlatformAdapter Trait + Python desktop_control.py &amp; capabilities.py)</text>
+  <text x="48" y="120" class="body">Unified API: inspect_accessibility_tree • get_frontmost_application • list_running_apps • launch_application • open_document_in_app • click_semantic_element • type_text_into_target</text>
+  <text x="48" y="136" class="mono">apps/desktop/src-tauri/src/platform/mod.rs  |  backend/omnidesk_engine/automation/desktop_control.py</text>
+
+  <!-- Fan-out lines -->
+  <path d="M 560 148 L 560 166 L 198 166 L 198 184" class="arrow" marker-end="url(#ah)" />
+  <line x1="560" y1="148" x2="560" y2="184" class="arrow" marker-end="url(#ah)" />
+  <path d="M 560 148 L 560 166 L 922 166 L 922 184" class="arrow" marker-end="url(#ah)" />
+
+  <!-- Column 1: macOS -->
+  <rect x="32" y="188" width="332" height="252" rx="10" class="card" />
+  <text x="48" y="214" class="heading">macOS Adapter</text>
+  <rect x="210" y="198" width="140" height="22" rx="6" class="pill-v" />
+  <text x="280" y="213" text-anchor="middle" class="pill-vt">Intel x64 Verified</text>
+  <text x="48" y="232" class="mono">platform/macos.rs</text>
+
+  <rect x="46" y="244" width="304" height="36" rx="6" class="row" />
+  <text x="56" y="259" class="label">Accessibility &amp; Apps</text>
+  <text x="56" y="273" class="body">AXIsProcessTrusted, System Events, lsappinfo, open -a</text>
+
+  <rect x="46" y="288" width="304" height="36" rx="6" class="row" />
+  <text x="56" y="303" class="label">Credentials &amp; Glass</text>
+  <text x="56" y="317" class="body">macOS Keychain • NSVisualEffectView vibrancy</text>
+
+  <rect x="46" y="332" width="304" height="36" rx="6" class="row" />
+  <text x="56" y="347" class="label">Safety &amp; TCC Boundaries</text>
+  <text x="56" y="361" class="body">Skips AXSecureTextField • Screen Recording deferred</text>
+
+  <rect x="46" y="376" width="304" height="48" rx="6" class="row" />
+  <text x="56" y="392" class="label">Packaging Targets</text>
+  <text x="56" y="407" class="body">.dmg, .app + PyInstaller sidecar (x64 verified;</text>
+  <text x="56" y="419" class="body">Apple Silicon arm64 CI configured, untested)</text>
+
+  <!-- Column 2: Windows -->
+  <rect x="394" y="188" width="332" height="252" rx="10" class="card" />
+  <text x="410" y="214" class="heading">Windows 10 / 11 Adapter</text>
+  <rect x="572" y="198" width="140" height="22" rx="6" class="pill-u" />
+  <text x="642" y="213" text-anchor="middle" class="pill-ut">Pending Host Test</text>
+  <text x="410" y="232" class="mono">platform/windows.rs</text>
+
+  <rect x="408" y="244" width="304" height="36" rx="6" class="row" />
+  <text x="418" y="259" class="label">Accessibility &amp; Windows</text>
+  <text x="418" y="273" class="body">UIAutomationClient (Invoke/Toggle/Value), Win32 User32</text>
+
+  <rect x="408" y="288" width="304" height="36" rx="6" class="row" />
+  <text x="418" y="303" class="label">Credentials &amp; Glass</text>
+  <text x="418" y="317" class="body">Credential Manager • Win11 Mica / Win10 Acrylic</text>
+
+  <rect x="408" y="332" width="304" height="36" rx="6" class="row" />
+  <text x="418" y="347" class="label">Safety &amp; Focus Control</text>
+  <text x="418" y="361" class="body">Skips IsPassword • SetForegroundWindow + Start-Process</text>
+
+  <rect x="408" y="376" width="304" height="48" rx="6" class="row" />
+  <text x="418" y="392" class="label">Packaging Targets</text>
+  <text x="418" y="407" class="body">.msi, NSIS .exe + WebView2 bootstrapper &amp; sidecar</text>
+  <text x="418" y="419" class="body">(x64 and ARM64 configured in GitHub Actions)</text>
+
+  <!-- Column 3: Linux -->
+  <rect x="756" y="188" width="332" height="252" rx="10" class="card" />
+  <text x="772" y="214" class="heading">Linux X11 &amp; Wayland</text>
+  <rect x="934" y="198" width="140" height="22" rx="6" class="pill-u" />
+  <text x="1004" y="213" text-anchor="middle" class="pill-ut">Pending Host Test</text>
+  <text x="772" y="232" class="mono">platform/linux.rs</text>
+
+  <rect x="770" y="244" width="304" height="36" rx="6" class="row" />
+  <text x="780" y="259" class="label">Accessibility &amp; Portals</text>
+  <text x="780" y="273" class="body">AT-SPI2 (Action/EditableText), D-Bus XDG Portals</text>
+
+  <rect x="770" y="288" width="304" height="36" rx="6" class="row" />
+  <text x="780" y="303" class="label">Credentials &amp; Glass</text>
+  <text x="780" y="317" class="body">Secret Service API • KDE/Hyprland blur or solid</text>
+
+  <rect x="770" y="332" width="304" height="36" rx="6" class="row" />
+  <text x="780" y="347" class="label">Wayland vs X11 Honesty</text>
+  <text x="780" y="361" class="body">Skips PASSWORD_TEXT • Refuses unsafe Wayland hooks</text>
+
+  <rect x="770" y="376" width="304" height="48" rx="6" class="row" />
+  <text x="780" y="392" class="label">Packaging Targets</text>
+  <text x="780" y="407" class="body">.deb, .rpm, .AppImage + PyInstaller sidecar</text>
+  <text x="780" y="419" class="body">(x64 and ARM64 configured in GitHub Actions)</text>
+</svg>

@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 340" width="1120" height="340" role="img" aria-labelledby="title desc">
+  <title id="title">Workflow Studio and Teach Mode Lifecycle</title>
+  <desc id="desc">How explicit Teach Mode demonstrations are captured, redacted, parameterized, synthesized into Workflow Studio DAGs, dry-run tested, and executed with approval controls.</desc>
+  <defs>
+    <style>
+      .bg { fill: #0E1116; stroke: #303A4A; stroke-width: 1.5; }
+      .box { fill: #161B22; stroke: #3A4659; stroke-width: 1.25; }
+      .accent { fill: #132238; stroke: #3B82F6; stroke-width: 1.3; }
+      .ok { fill: #122E24; stroke: #2F855A; stroke-width: 1.3; }
+      .title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 18px; font-weight: 700; fill: #F0F4F8; }
+      .subtitle { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 12px; fill: #9BA7B8; }
+      .tag { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 10px; font-weight: 700; fill: #6CB6FF; }
+      .label { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 12.5px; font-weight: 650; fill: #F0F4F8; }
+      .ok-t { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 12.5px; font-weight: 650; fill: #4CD98D; }
+      .body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 10.5px; fill: #9BA7B8; }
+      .arrow { stroke: #6CB6FF; stroke-width: 1.7; fill: none; }
+    </style>
+    <marker id="ah" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#6CB6FF" />
+    </marker>
+  </defs>
+
+  <rect x="1" y="1" width="1118" height="338" rx="14" class="bg" />
+  <text x="32" y="38" class="title">Workflow Studio and Teach Mode Lifecycle</text>
+  <text x="32" y="56" class="subtitle">Explicit opt-in demonstration capture, automatic secret redaction, editable visual DAGs, and bounded replay</text>
+
+  <!-- Stage 1 -->
+  <rect x="32" y="92" width="194" height="176" rx="10" class="box" />
+  <text x="46" y="114" class="tag">TEACH MODE</text>
+  <text x="46" y="135" class="label">1. Explicit Capture</text>
+  <text x="46" y="156" class="body">• User starts recording</text>
+  <text x="46" y="172" class="body">  with visible top banner</text>
+  <text x="46" y="192" class="body">• Scoped to target folder</text>
+  <text x="46" y="208" class="body">  or permitted app</text>
+  <text x="46" y="228" class="body">• Captures semantic steps</text>
+  <text x="46" y="244" class="body">  &amp; active window events</text>
+
+  <line x1="226" y1="180" x2="254" y2="180" class="arrow" marker-end="url(#ah)" />
+
+  <!-- Stage 2 -->
+  <rect x="258" y="92" width="194" height="176" rx="10" class="accent" />
+  <text x="272" y="114" class="tag">PRIVACY FILTER</text>
+  <text x="272" y="135" class="label">2. Redact &amp; Clean</text>
+  <text x="272" y="156" class="body">• Drops password and</text>
+  <text x="272" y="172" class="body">  secure text fields</text>
+  <text x="272" y="192" class="body">• Skips excluded apps</text>
+  <text x="272" y="208" class="body">  (1Password, Keychain)</text>
+  <text x="272" y="228" class="body">• User can delete steps</text>
+  <text x="272" y="244" class="body">  before synthesis</text>
+
+  <line x1="452" y1="180" x2="480" y2="180" class="arrow" marker-end="url(#ah)" />
+
+  <!-- Stage 3 -->
+  <rect x="484" y="92" width="194" height="176" rx="10" class="box" />
+  <text x="498" y="114" class="tag">SYNTHESIS</text>
+  <text x="498" y="135" class="label">3. Parameterize</text>
+  <text x="498" y="156" class="body">• Extracts reusable</text>
+  <text x="498" y="172" class="body">  variables (directories,</text>
+  <text x="498" y="188" class="body">  URLs, app targets)</text>
+  <text x="498" y="208" class="body">• Builds versioned</text>
+  <text x="498" y="224" class="body">  WorkflowDefinition</text>
+  <text x="498" y="240" class="body">  stored in SQLite</text>
+
+  <line x1="678" y1="180" x2="706" y2="180" class="arrow" marker-end="url(#ah)" />
+
+  <!-- Stage 4 -->
+  <rect x="710" y="92" width="194" height="176" rx="10" class="accent" />
+  <text x="724" y="114" class="tag">WORKFLOW STUDIO</text>
+  <text x="724" y="135" class="label">4. Visual DAG Edit</text>
+  <text x="724" y="156" class="body">• Pan, zoom, minimap</text>
+  <text x="724" y="172" class="body">• Keyboard &amp; pointer</text>
+  <text x="724" y="188" class="body">  node positioning</text>
+  <text x="724" y="208" class="body">• Approval gates &amp; loops</text>
+  <text x="724" y="224" class="body">  (capped at 100 iters)</text>
+  <text x="724" y="240" class="body">• Undo/redo &amp; JSON export</text>
+
+  <line x1="904" y1="180" x2="932" y2="180" class="arrow" marker-end="url(#ah)" />
+
+  <!-- Stage 5 -->
+  <rect x="936" y="92" width="152" height="176" rx="10" class="ok" />
+  <text x="950" y="114" class="tag">EXECUTION</text>
+  <text x="950" y="135" class="ok-t">5. Replay</text>
+  <text x="950" y="156" class="body">• Dry-run test mode</text>
+  <text x="950" y="176" class="body">• Same policy gates</text>
+  <text x="950" y="192" class="body">  &amp; approval checks</text>
+  <text x="950" y="212" class="body">• Journaled undo &amp;</text>
+  <text x="950" y="228" class="body">  Activity audit log</text>
+
+  <text x="32" y="306" class="body">No background surveillance: Teach Mode records only while actively started by the user and halts immediately on Stop Recording or Emergency Stop.</text>
+</svg>

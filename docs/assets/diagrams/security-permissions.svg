@@ -1,0 +1,105 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 420" width="1120" height="420" role="img" aria-labelledby="title desc">
+  <title id="title">OmniDesk Security and Permission Enforcement</title>
+  <desc id="desc">Four defense-in-depth security layers covering transport isolation, input sanitization, deny-by-default risk policy, and human approval plus rollback controls.</desc>
+  <defs>
+    <style>
+      .bg { fill: #0E1116; stroke: #303A4A; stroke-width: 1.5; }
+      .layer { fill: #161B22; stroke: #3A4659; stroke-width: 1.25; }
+      .item { fill: #1C2330; stroke: #2E3848; stroke-width: 1; }
+      .tier-r { fill: #122E24; stroke: #2F855A; stroke-width: 1; }
+      .tier-m { fill: #132238; stroke: #3B82F6; stroke-width: 1; }
+      .tier-w { fill: #241D10; stroke: #D69E2E; stroke-width: 1; }
+      .tier-d { fill: #2D1418; stroke: #C92A2A; stroke-width: 1; }
+      .title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 18px; font-weight: 700; fill: #F0F4F8; }
+      .subtitle { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 12px; fill: #9BA7B8; }
+      .heading { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 13px; font-weight: 700; fill: #F0F4F8; }
+      .label { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 11px; font-weight: 600; fill: #E2E8F0; }
+      .body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 10.5px; fill: #9BA7B8; }
+      .t-ok { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 10px; font-weight: 700; fill: #4CD98D; }
+      .t-bl { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 10px; font-weight: 700; fill: #6CB6FF; }
+      .t-wn { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 10px; font-weight: 700; fill: #F5B942; }
+      .t-dg { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 10px; font-weight: 700; fill: #FF8787; }
+    </style>
+  </defs>
+
+  <rect x="1" y="1" width="1118" height="418" rx="14" class="bg" />
+  <text x="32" y="38" class="title">Security and Permission Enforcement</text>
+  <text x="32" y="56" class="subtitle">Layered runtime boundaries enforcing least privilege, explicit user consent, and auditability (defense-in-depth, not risk elimination)</text>
+
+  <!-- 4 Security Columns -->
+  <rect x="32" y="80" width="250" height="202" rx="10" class="layer" />
+  <text x="46" y="104" class="heading">1. Transport &amp; Secrets</text>
+  <rect x="44" y="118" width="226" height="46" rx="6" class="item" />
+  <text x="54" y="135" class="label">Loopback-Only Engine</text>
+  <text x="54" y="150" class="body">127.0.0.1 + 256-bit Bearer token</text>
+  <rect x="44" y="172" width="226" height="46" rx="6" class="item" />
+  <text x="54" y="189" class="label">OS Credential Vault</text>
+  <text x="54" y="204" class="body">Keychain / Win Cred / Secret Service</text>
+  <rect x="44" y="226" width="226" height="44" rx="6" class="item" />
+  <text x="54" y="243" class="label">Strict Tauri CSP</text>
+  <text x="54" y="258" class="body">script-src 'self', no arbitrary shell</text>
+
+  <rect x="300" y="80" width="250" height="202" rx="10" class="layer" />
+  <text x="314" y="104" class="heading">2. Context Isolation</text>
+  <rect x="312" y="118" width="226" height="46" rx="6" class="item" />
+  <text x="322" y="135" class="label">Prompt-Injection Guard</text>
+  <text x="322" y="150" class="body">Web &amp; file text tagged untrusted</text>
+  <rect x="312" y="172" width="226" height="46" rx="6" class="item" />
+  <text x="322" y="189" class="label">Sensitive App Exclusion</text>
+  <text x="322" y="204" class="body">1Password, Bitwarden, Keychain</text>
+  <rect x="312" y="226" width="226" height="44" rx="6" class="item" />
+  <text x="322" y="243" class="label">Password Field Refusal</text>
+  <text x="322" y="258" class="body">AXSecure / IsPassword / PASSWORD</text>
+
+  <rect x="568" y="80" width="250" height="202" rx="10" class="layer" />
+  <text x="582" y="104" class="heading">3. Scope &amp; Path Policy</text>
+  <rect x="580" y="118" width="226" height="46" rx="6" class="item" />
+  <text x="590" y="135" class="label">Scoped Directory Roots</text>
+  <text x="590" y="150" class="body">Path.resolve() blocks .. &amp; symlinks</text>
+  <rect x="580" y="172" width="226" height="46" rx="6" class="item" />
+  <text x="590" y="189" class="label">Protected System Paths</text>
+  <text x="590" y="204" class="body">/System, /etc, ~/.ssh, System32 denied</text>
+  <rect x="580" y="226" width="226" height="44" rx="6" class="item" />
+  <text x="590" y="243" class="label">URL &amp; SSRF Filtering</text>
+  <text x="590" y="258" class="body">Blocks file:// &amp; metadata endpoints</text>
+
+  <rect x="836" y="80" width="252" height="202" rx="10" class="layer" />
+  <text x="850" y="104" class="heading">4. Human Control</text>
+  <rect x="848" y="118" width="228" height="46" rx="6" class="item" />
+  <text x="858" y="135" class="label">Dry-Run Approval Modal</text>
+  <text x="858" y="150" class="body">Explicit Approve / Deny per mutation</text>
+  <rect x="848" y="172" width="228" height="46" rx="6" class="item" />
+  <text x="858" y="189" class="label">SHA-256 Undo Journal</text>
+  <text x="858" y="204" class="body">Verified rollback for file moves</text>
+  <rect x="848" y="226" width="228" height="44" rx="6" class="item" />
+  <text x="858" y="243" class="label">Global Emergency Stop</text>
+  <text x="858" y="258" class="body">Halts tasks, observers, AI streams</text>
+
+  <!-- Bottom Bar: 6 Risk Tiers -->
+  <rect x="32" y="300" width="1056" height="94" rx="10" class="layer" />
+  <text x="48" y="324" class="heading">Six Deny-by-Default Risk Tiers (backend/omnidesk_engine/security/policy.py)</text>
+
+  <rect x="48" y="336" width="160" height="44" rx="6" class="tier-r" />
+  <text x="58" y="353" class="t-ok">read_only</text>
+  <text x="58" y="369" class="body">Auto in scope</text>
+
+  <rect x="220" y="336" width="174" height="44" rx="6" class="tier-m" />
+  <text x="230" y="353" class="t-bl">reversible_modification</text>
+  <text x="230" y="369" class="body">Approval + Undo</text>
+
+  <rect x="406" y="336" width="160" height="44" rx="6" class="tier-w" />
+  <text x="416" y="353" class="t-wn">sensitive_access</text>
+  <text x="416" y="369" class="body">Explicit Approval</text>
+
+  <rect x="578" y="336" width="178" height="44" rx="6" class="tier-w" />
+  <text x="588" y="353" class="t-wn">external_communication</text>
+  <text x="588" y="369" class="body">Explicit Approval</text>
+
+  <rect x="768" y="336" width="144" height="44" rx="6" class="tier-d" />
+  <text x="778" y="353" class="t-dg">destructive</text>
+  <text x="778" y="369" class="body">Blocked by default</text>
+
+  <rect x="924" y="336" width="150" height="44" rx="6" class="tier-d" />
+  <text x="934" y="353" class="t-dg">privileged_system</text>
+  <text x="934" y="369" class="body">Blocked / Unregistered</text>
+</svg>

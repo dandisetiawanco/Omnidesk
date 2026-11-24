@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 440" width="1120" height="440" role="img" aria-labelledby="title desc">
+  <title id="title">Local and Cloud AI Provider Architecture</title>
+  <desc id="desc">Provider routing with Privacy Mode enforcement, configurable fallback priority, local Ollama runtime management, cloud API integrations, and deterministic local fallback.</desc>
+  <defs>
+    <style>
+      .bg { fill: #0E1116; stroke: #303A4A; stroke-width: 1.5; }
+      .box { fill: #161B22; stroke: #3A4659; stroke-width: 1.25; }
+      .sub { fill: #1C2330; stroke: #2E3848; stroke-width: 1; }
+      .local { fill: #122E24; stroke: #2F855A; stroke-width: 1.3; }
+      .gate { fill: #132238; stroke: #3B82F6; stroke-width: 1.3; }
+      .warn { fill: #241D10; stroke: #D69E2E; stroke-width: 1.3; }
+      .title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 18px; font-weight: 700; fill: #F0F4F8; }
+      .subtitle { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 12px; fill: #9BA7B8; }
+      .heading { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 13px; font-weight: 700; fill: #F0F4F8; }
+      .label { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 11px; font-weight: 600; fill: #E2E8F0; }
+      .body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 10.5px; fill: #9BA7B8; }
+      .ok-t { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 13px; font-weight: 700; fill: #4CD98D; }
+      .warn-t { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 12px; font-weight: 700; fill: #F5B942; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 10px; fill: #6CB6FF; }
+      .arrow { stroke: #6CB6FF; stroke-width: 1.6; fill: none; }
+      .dash { stroke: #68768A; stroke-width: 1.4; stroke-dasharray: 4 3; fill: none; }
+    </style>
+    <marker id="ah" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#6CB6FF" />
+    </marker>
+    <marker id="ah-d" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#68768A" />
+    </marker>
+  </defs>
+
+  <rect x="1" y="1" width="1118" height="438" rx="14" class="bg" />
+  <text x="32" y="38" class="title">Local and Cloud AI Provider Architecture</text>
+  <text x="32" y="56" class="subtitle">Local-first routing with OS vault credentials, SSE streaming, cancellation, RAM management, and deterministic safety fallback</text>
+
+  <!-- Left: Router & Privacy Gate -->
+  <rect x="32" y="84" width="236" height="320" rx="10" class="gate" />
+  <text x="48" y="110" class="heading">ProviderRegistry Router</text>
+  <text x="48" y="128" class="mono">providers/registry.py</text>
+
+  <rect x="46" y="144" width="208" height="64" rx="7" class="sub" />
+  <text x="56" y="162" class="label">Privacy Mode Gate</text>
+  <text x="56" y="177" class="body">local_only blocks all cloud</text>
+  <text x="56" y="191" class="body">requests before network I/O</text>
+
+  <rect x="46" y="220" width="208" height="64" rx="7" class="sub" />
+  <text x="56" y="238" class="label">Fallback Priority Order</text>
+  <text x="56" y="253" class="body">User-ordered provider list</text>
+  <text x="56" y="267" class="body">with automatic failover</text>
+
+  <rect x="46" y="296" width="208" height="92" rx="7" class="sub" />
+  <text x="56" y="314" class="label">Runtime Controls</text>
+  <text x="56" y="329" class="body">• SSE streaming previews</text>
+  <text x="56" y="343" class="body">• Active client cancellation</text>
+  <text x="56" y="357" class="body">• Token &amp; cost tracking</text>
+  <text x="56" y="371" class="body">• Capability auto-detection</text>
+
+  <!-- Arrows from Router to Providers -->
+  <line x1="268" y1="152" x2="310" y2="152" class="arrow" marker-end="url(#ah)" />
+  <line x1="268" y1="296" x2="310" y2="296" class="dash" marker-end="url(#ah-d)" />
+
+  <!-- Middle Top: Local Ollama -->
+  <rect x="314" y="84" width="466" height="128" rx="10" class="local" />
+  <text x="330" y="110" class="ok-t">Local Inference: Ollama (Offline Default)</text>
+  <text x="330" y="128" class="mono">http://127.0.0.1:11434  |  Verified: qwen2.5:1.5b (Q4_K_M, ~986 MB)</text>
+  <text x="330" y="148" class="body">• Resource-aware defaults: num_ctx=2048, OLLAMA_MAX_LOADED_MODELS=1, keep_alive=2m</text>
+  <text x="330" y="164" class="body">• Lifecycle API: runtime detection, on-demand start, pull progress, one-click RAM unload, delete</text>
+  <text x="330" y="180" class="body">• Zero external data transfer; runs locally on CPU or GPU depending on host hardware</text>
+  <text x="330" y="196" class="body">• Observed on Intel Core i5 / 8 GB RAM macOS 15: ~13.2s cold JSON plan, 0 MB retained after unload</text>
+
+  <!-- Middle Bottom: Cloud Providers -->
+  <rect x="314" y="226" width="466" height="178" rx="10" class="box" />
+  <text x="330" y="252" class="heading">Cloud &amp; Custom Providers (Requires Cloud-Assisted Mode + User API Key)</text>
+  <text x="330" y="269" class="body">Keys stored strictly in OS Keychain / Credential Manager / Secret Service</text>
+
+  <rect x="330" y="282" width="210" height="50" rx="6" class="sub" />
+  <text x="342" y="300" class="label">Google Gemini</text>
+  <text x="342" y="315" class="body">generateContent JSON + SSE + /models</text>
+
+  <rect x="554" y="282" width="210" height="50" rx="6" class="sub" />
+  <text x="566" y="300" class="label">OpenAI</text>
+  <text x="566" y="315" class="body">json_object + SSE + /models discovery</text>
+
+  <rect x="330" y="342" width="210" height="50" rx="6" class="sub" />
+  <text x="342" y="360" class="label">Anthropic Claude</text>
+  <text x="342" y="375" class="body">Native submit_plan tool_choice + SSE</text>
+
+  <rect x="554" y="342" width="210" height="50" rx="6" class="sub" />
+  <text x="566" y="360" class="label">OpenAI-Compatible</text>
+  <text x="566" y="375" class="body">Custom base URL (llama.cpp, vLLM, etc.)</text>
+
+  <!-- Right: Validation & Deterministic Fallback -->
+  <line x1="780" y1="152" x2="824" y2="196" class="arrow" marker-end="url(#ah)" />
+  <line x1="780" y1="312" x2="824" y2="262" class="arrow" marker-end="url(#ah)" />
+
+  <rect x="828" y="84" width="260" height="320" rx="10" class="warn" />
+  <text x="844" y="110" class="warn-t">Policy Validation &amp; Fallback</text>
+  <text x="844" y="128" class="mono">intelligence/planner.py</text>
+
+  <rect x="842" y="144" width="232" height="106" rx="7" class="sub" />
+  <text x="852" y="162" class="label">Strict Plan Rejection Rules</text>
+  <text x="852" y="178" class="body">• Unknown or unregistered tools</text>
+  <text x="852" y="193" class="body">• Destructive / shell commands</text>
+  <text x="852" y="208" class="body">• Missing required parameters</text>
+  <text x="852" y="223" class="body">• File mutations without dry-run</text>
+  <text x="852" y="238" class="body">• Non-existent target documents</text>
+
+  <rect x="842" y="264" width="232" height="124" rx="7" class="sub" />
+  <text x="852" y="282" class="label">Deterministic Local Planner</text>
+  <text x="852" y="298" class="body">If all models are unavailable or</text>
+  <text x="852" y="313" class="body">rejected, OmniDesk switches to</text>
+  <text x="852" y="328" class="body">built-in deterministic planning</text>
+  <text x="852" y="343" class="body">and displays a transparent</text>
+  <text x="852" y="358" class="body">fallback notice on the task run.</text>
+</svg>

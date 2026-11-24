@@ -1,16 +1,16 @@
 # Contributing to OmniDesk
 
-Contributions are welcome across platform adapters, automation tools, workflow nodes, security hardening, and documentation.
+Contributions are welcome across native platform adapters (especially Windows 10/11 and Linux X11/Wayland hardware verification), automation executors, local/cloud AI provider reliability, Workflow Studio usability, security hardening, and documentation.
 
-## Development Standards
+## Engineering Guidelines
 
-1. **Isolate platform code**: Keep macOS, Windows, and Linux implementations behind `apps/desktop/src-tauri/src/platform/` and avoid leaking OS assumptions into shared UI or orchestration logic.
-2. **Preserve security boundaries**: Every new automation tool must register an explicit `ToolPolicy` entry in `backend/omnidesk_engine/security/policy.py` with accurate risk tier, approval requirement, and reversibility flag. Never claim an irreversible action can be undone.
-3. **Zero plaintext secrets**: Never store tokens or API keys in config files, SQLite, logs, or test fixtures committed to Git.
-4. **Honest capabilities**: Never mark an unimplemented or unsupported platform feature as available.
-5. **Accessibility & Omni Glass quality**: Verify WCAG AA contrast ratios in both Light and Dark modes, keyboard navigation (`Tab`, `Enter`, `Space`, `Escape`), and responsive reflow before opening a pull request.
+1. **Keep platform code isolated**: Place OS-specific Rust implementations in `apps/desktop/src-tauri/src/platform/` (`macos.rs`, `windows.rs`, `linux.rs`) and Python OS adapters in `backend/omnidesk_engine/automation/desktop_control.py` and `capabilities.py`.
+2. **Preserve security invariants**: Any new tool must declare an explicit `ToolPolicy` in `backend/omnidesk_engine/security/policy.py` with accurate risk tier, approval requirement, and reversibility status. Never label a non-reversible operation as undoable.
+3. **Never commit secrets or user data**: Do not store API keys, session tokens, `.env` files, `.db` files, or machine-specific paths in code, tests, or fixtures.
+4. **Report platform support honestly**: Mark untested OS functionality as `implemented_untested` or `experimental` until verified on actual target hardware.
+5. **Maintain Omni Glass & accessibility standards**: Keep WCAG AA contrast ratios in both Light and Dark themes, preserve keyboard navigation (`Tab`, `Enter`, `Space`, `Escape`), and respect `prefers-reduced-motion` and Performance Mode.
 
-## Verification Checklist Before Opening a PR
+## Local Verification Before Opening a Pull Request
 
 ```bash
 pnpm typecheck
@@ -19,3 +19,9 @@ pnpm test:web
 PYTHONPATH=backend backend/.venv/bin/pytest backend/tests -v
 cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
 ```
+
+## Pull Request Process
+
+1. Fork `https://github.com/dandisetiawanco/Omnidesk` and create a descriptive feature or fix branch.
+2. Keep pull requests focused and include unit tests for backend policies, provider logic, or schema updates.
+3. Fill out the pull request template with what changed, how it was verified, and which operating system/architecture you tested on.

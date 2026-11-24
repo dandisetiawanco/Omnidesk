@@ -1,0 +1,37 @@
+name: Feature Request
+description: Propose a focused improvement or cross-platform capability for OmniDesk
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: Describe the real desktop automation or workflow task that is currently difficult or unsupported.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Solution
+      description: Outline the expected behavior, target OS scope, and any UI or backend changes.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Local AI / Cloud Providers
+        - Native OS Adapter (macOS / Windows / Linux)
+        - Workflow Studio / Teach Mode
+        - Security & Permissions
+        - Omni Glass UI / Accessibility
+        - Packaging & Distribution
+    validations:
+      required: true
+  - type: textarea
+    id: security_impact
+    attributes:
+      label: Security & Privacy Considerations
+      description: What permission tier, approval gate, or OS boundary does this feature interact with?
