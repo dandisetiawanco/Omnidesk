@@ -149,7 +149,7 @@ def get_frontmost_application() -> dict[str, Any]:
                     [
                         "osascript",
                         "-e",
-                        'tell application "System Events" to get name of front window of (first application process whose frontmost is true)',
+                        'tell application "System Events" to get name of window 1 of (first application process whose frontmost is true)',
                     ],
                     capture_output=True,
                     text=True,
@@ -247,34 +247,70 @@ tell application "System Events"
   tell process "{safe_target}"
     set winTitle to ""
     try
-      set winTitle to name of front window
+      set winTitle to name of window 1
     end try
-    set outLines to {{"WINDOW::" & winTitle}}
+    if winTitle is missing value then set winTitle to ""
+    set collectedItems to {{"WINDOW::" & winTitle}}
     try
-      repeat with b in (buttons of front window)
-        set bName to name of b
-        if bName is not missing value and bName is not "" then
-          set end of outLines to ("AXButton::" & bName)
-        end if
+      set uiElems to UI elements of window 1
+      repeat with el in uiElems
+        try
+          set r to role of el
+          set sr to ""
+          try
+            set sr to subrole of el
+          end try
+          if sr is "AXSecureTextField" then
+            set end of collectedItems to "REDACTED::Secure Text Field skipped"
+          else
+            set lbl to ""
+            try
+              set n to name of el
+              if n is not missing value and n is not "" then set lbl to n as text
+            end try
+            if lbl is "" then
+              try
+                set d to description of el
+                if d is not missing value and d is not "" then set lbl to d as text
+              end try
+            end if
+            if lbl is "" then
+              try
+                set t to title of el
+                if t is not missing value and t is not "" then set lbl to t as text
+              end try
+            end if
+            if lbl is "" then set lbl to r as text
+            set end of collectedItems to ((r as text) & "::" & lbl)
+          end if
+        end try
       end repeat
     end try
     try
-      repeat with tf in (text fields of front window)
-        set subRole to ""
-        try
-          set subRole to subrole of tf
-        end try
-        if subRole is not "AXSecureTextField" then
-          set tfName to description of tf
-          if tfName is missing value or tfName is "" then set tfName to "Text Field"
-          set end of outLines to ("AXTextField::" & tfName)
-        else
-          set end of outLines to ("REDACTED::Secure Text Field skipped")
-        end if
+      repeat with sa in (scroll areas of window 1)
+        repeat with innerEl in (UI elements of sa)
+          try
+            set ir to role of innerEl
+            set isr to ""
+            try
+              set isr to subrole of innerEl
+            end try
+            if isr is "AXSecureTextField" then
+              set end of collectedItems to "REDACTED::Secure Text Field skipped"
+            else
+              set ilbl to ir as text
+              try
+                set idesc to description of innerEl
+                if idesc is not missing value and idesc is not "" then set ilbl to idesc as text
+              end try
+              set end of collectedItems to ((ir as text) & "::" & ilbl)
+            end if
+          end try
+        end repeat
       end repeat
     end try
     set AppleScript's text item delimiters to linefeed
-    return outLines as text
+    return collectedItems as text
   end tell
 end tell
 '''
@@ -357,8 +393,16 @@ def open_document_in_app(
         )
         if proc.returncode != 0:
             raise RuntimeError(proc.stderr.strip() or f"macOS could not open '{fpath.name}' in '{clean_app}'.")
-        running = [a["name"] for a in list_running_apps()]
-        app_verified = any(clean_app.lower() in r.lower() for r in running)
+        import time
+
+        app_verified = False
+        running: list[str] = []
+        for _ in range(10):
+            running = [a["name"] for a in list_running_apps()]
+            if any(clean_app.lower() in r.lower() for r in running):
+                app_verified = True
+                break
+            time.sleep(0.2)
         return {
             "app_name": clean_app,
             "file_path": str(fpath),
@@ -413,7 +457,7 @@ tell application "{safe_app}" to activate
 delay 0.25
 tell application "System Events"
   tell process "{safe_app}"
-    click {ax_kind} "{safe_el}" of front window
+    click {ax_kind} "{safe_el}" of window 1
   end tell
 end tell
 '''

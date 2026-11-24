@@ -662,6 +662,13 @@ export const App: React.FC = () => {
                   settings={settings}
                   profile={profile}
                   onSaveSettings={handleSaveSettings}
+                  onRefreshProfile={async () => {
+                    const [nativeProf, apiProf] = await Promise.all([
+                      getNativeSystemProfile(),
+                      api.getSystemProfile(),
+                    ]);
+                    setProfile(nativeProf ?? apiProf);
+                  }}
                   onNotify={notify}
                 />
               )}

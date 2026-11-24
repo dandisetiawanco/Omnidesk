@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ExternalLink, FolderPlus, Save, ShieldCheck, Trash2 } from "lucide-react";
+import { ExternalLink, FolderPlus, RefreshCw, Save, ShieldCheck, Trash2 } from "lucide-react";
 import type { AppSettings, SystemProfile } from "@omnidesk/shared-schemas";
 import { api } from "../lib/api";
 import { BrandMark } from "../components/BrandMark";
@@ -11,6 +11,7 @@ interface SettingsViewProps {
   settings: AppSettings;
   profile: SystemProfile | null;
   onSaveSettings: (next: AppSettings) => Promise<void>;
+  onRefreshProfile: () => Promise<void>;
   onNotify: (title: string, detail?: string, tone?: "info" | "success" | "error") => void;
 }
 
@@ -18,6 +19,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   settings,
   profile,
   onSaveSettings,
+  onRefreshProfile,
   onNotify,
 }) => {
   const [draft, setDraft] = useState<AppSettings>(settings);
@@ -341,11 +343,25 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       <section className="panel" aria-label="Platform capabilities registry">
         <div className="panel-header">
           <h2 className="panel-title">Platform Capabilities &amp; Diagnostics</h2>
-          <StatusTag
-            tone={conn.authenticated ? "success" : "warning"}
-            kind="shield"
-            label={conn.authenticated ? "Authenticated Loopback IPC" : "Local session"}
-          />
+          <div className="flex-row flex-wrap">
+            <button
+              type="button"
+              className="btn"
+              style={{ minHeight: 30, fontSize: 12.5 }}
+              onClick={async () => {
+                await onRefreshProfile();
+                onNotify("Permission status refreshed", "Re-queried live OS permissions and capabilities.", "info");
+              }}
+            >
+              <RefreshCw size={13} aria-hidden="true" />
+              <span>Refresh Permissions</span>
+            </button>
+            <StatusTag
+              tone={conn.authenticated ? "success" : "warning"}
+              kind="shield"
+              label={conn.authenticated ? "Authenticated Loopback IPC" : "Local session"}
+            />
+          </div>
         </div>
 
         {profile ? (
