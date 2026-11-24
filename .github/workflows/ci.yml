@@ -1,0 +1,89 @@
+name: OmniDesk Cross-Platform CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  frontend-and-backend:
+    name: Web UI, Schemas & Python Engine
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install JS workspace dependencies
+        run: pnpm install --frozen-lockfile || pnpm install
+
+      - name: Typecheck & Build Desktop Web Bundle
+        run: |
+          pnpm typecheck
+          pnpm build:web
+
+      - name: Run Schema & UI Tests
+        run: |
+          pnpm test:schemas
+          pnpm test:web
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install & Test Python Engine
+        working-directory: backend
+        run: |
+          uv sync --extra dev
+          PYTHONPATH=. uv run pytest tests -v
+
+  desktop-native-build:
+    name: Native Tauri 2 Build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+          - os: windows-latest
+          - os: ubuntu-22.04
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux Tauri system libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libsecret-1-dev
+
+      - name: Install frontend dependencies & build dist
+        run: |
+          pnpm install
+          pnpm build:web
+
+      - name: Run Rust unit tests
+        working-directory: apps/desktop/src-tauri
+        run: cargo test
+
+      - name: Validate Tauri release bundle
+        working-directory: apps/desktop
+        run: pnpm tauri build --no-bundle

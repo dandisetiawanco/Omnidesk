@@ -212,11 +212,10 @@ pub fn run() {
     app.run(|app_handle, event| {
         if let tauri::RunEvent::Exit = event {
             let state = app_handle.state::<BackendState>();
-            if let Ok(mut guard) = state.child.lock() {
-                if let Some(mut proc) = guard.take() {
-                    let _ = proc.kill();
-                    let _ = proc.wait();
-                }
+            let child_opt = state.child.lock().ok().and_then(|mut g| g.take());
+            if let Some(mut proc) = child_opt {
+                let _ = proc.kill();
+                let _ = proc.wait();
             }
         }
     });

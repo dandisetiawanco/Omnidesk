@@ -1,0 +1,125 @@
+@layer reset, base, theme, components, utilities;
+
+@layer reset {
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+    min-height: 100dvh;
+    box-sizing: border-box;
+  }
+
+  :where(h1, h2, h3, h4, p, ul, ol, figure, dl, dd) {
+    margin: 0;
+  }
+
+  :where(div, section, article, main, aside, header, nav, footer, form, input, textarea, select, button, dialog) {
+    box-sizing: border-box;
+  }
+
+  :where(img, svg) {
+    display: block;
+    max-width: 100%;
+  }
+
+  :where(button, input, textarea, select) {
+    font: inherit;
+    color: inherit;
+  }
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text-primary);
+    background-color: var(--bg-canvas);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    overflow-x: hidden;
+  }
+
+  /* Pointer affordance set once in base layer per R-39 */
+  a[href],
+  button,
+  summary,
+  select,
+  label[for],
+  label:has(> input[type="checkbox"], > input[type="radio"]),
+  [role="button"],
+  [role="link"],
+  [role="tab"],
+  [role="menuitem"],
+  [role="option"],
+  [role="switch"],
+  input[type="checkbox"],
+  input[type="radio"],
+  input[type="file"],
+  input[type="submit"],
+  input[type="button"],
+  input[type="reset"],
+  input[type="range"] {
+    cursor: pointer;
+  }
+
+  :disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+
+  :where(a, button, input, textarea, select, summary, [tabindex]):focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  code,
+  pre,
+  kbd,
+  .mono {
+    font-family: var(--font-mono);
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .visually-hidden:where(:not(:focus-within, :active)) {
+    position: absolute !important;
+    clip-path: inset(50%) !important;
+    overflow: hidden !important;
+    width: 1px !important;
+    height: 1px !important;
+    margin: -1px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    white-space: nowrap !important;
+  }
+
+  .skip-link {
+    position: fixed;
+    inset-block-start: -64px;
+    inset-inline-start: var(--space-4);
+    z-index: 200;
+    padding: 10px 16px;
+    background: var(--accent-solid);
+    color: var(--text-on-accent);
+    border-radius: var(--radius-md);
+    text-decoration: none;
+    font-weight: 600;
+  }
+
+  .skip-link:focus {
+    inset-block-start: var(--space-3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: 0ms;
+    --motion-base: 0ms;
+  }
+}
