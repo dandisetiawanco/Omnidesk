@@ -83,16 +83,30 @@ class SelectedModels(BaseModel):
     lightweight: str | None = None
 
 
+class TokenUsage(BaseModel):
+    provider_id: str
+    model: str
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+    estimated_cost_usd: float | None = None
+    latency_ms: int = 0
+
+
 class ProviderStatus(BaseModel):
     id: Literal["openai", "gemini", "anthropic", "ollama", "openai_compatible"]
     label: str
     kind: Literal["local", "cloud", "custom"]
     configured: bool
     reachable: bool
+    runtime_installed: bool = True
     status_detail: str
     base_url: str | None = None
     masked_key: str | None = None
+    primary_model: str | None = None
+    context_limit: int = 2048
     available_models: list[str] = Field(default_factory=list)
+    loaded_models: list[str] = Field(default_factory=list)
     model_capabilities: dict[str, list[str]] = Field(default_factory=dict)
     selected_models: SelectedModels = Field(default_factory=SelectedModels)
 
@@ -101,6 +115,8 @@ class ProviderConfigUpdate(BaseModel):
     api_key: str | None = None
     clear_key: bool = False
     base_url: str | None = None
+    primary_model: str | None = None
+    context_limit: int | None = Field(default=None, ge=512, le=32768)
     selected_models: SelectedModels | None = None
 
 
@@ -158,6 +174,8 @@ class TaskRun(BaseModel):
     steps: list[ActionStep] = Field(default_factory=list)
     pending_approval: ApprovalRequest | None = None
     artifacts: list[TaskArtifact] = Field(default_factory=list)
+    usage: TokenUsage | None = None
+    fallback_note: str | None = None
 
 
 class CreateTaskRequest(BaseModel):
@@ -298,6 +316,10 @@ class AppSettings(BaseModel):
     global_shortcut: str = "CommandOrControl+Shift+Space"
     onboarding_completed: bool = False
     telemetry_enabled: bool = False
+    provider_fallback_order: list[str] = Field(
+        default_factory=lambda: ["ollama", "gemini", "openai", "anthropic", "openai_compatible"]
+    )
+    local_context_limit: int = Field(default=2048, ge=512, le=32768)
 
 
 class AuditEntry(BaseModel):

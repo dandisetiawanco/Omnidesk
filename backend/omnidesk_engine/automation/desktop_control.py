@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import ctypes
+import json
 import os
 import platform
 import re
+import shutil
 import subprocess
+import time
 from pathlib import Path
 from typing import Any
+
+import psutil
 
 from omnidesk_engine.automation.apps import validate_app_name
 from omnidesk_engine.security.policy import (
@@ -58,6 +63,48 @@ def macos_screen_recording_granted() -> bool:
         return False
 
 
+def linux_is_wayland() -> bool:
+    return os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland" or bool(
+        os.environ.get("WAYLAND_DISPLAY")
+    )
+
+
+def linux_dbus_service_present(service_name: str) -> bool:
+    if platform.system() != "Linux":
+        return False
+    if shutil.which("busctl"):
+        try:
+            out = subprocess.check_output(
+                ["busctl", "--user", "list", "--no-legend"], text=True, timeout=2
+            )
+            if service_name in out:
+                return True
+        except Exception:
+            pass
+    if shutil.which("gdbus"):
+        try:
+            out = subprocess.check_output(
+                [
+                    "gdbus",
+                    "call",
+                    "--session",
+                    "--dest",
+                    "org.freedesktop.DBus",
+                    "--object-path",
+                    "/org/freedesktop/DBus",
+                    "--method",
+                    "org.freedesktop.DBus.NameHasOwner",
+                    service_name,
+                ],
+                text=True,
+                timeout=2,
+            )
+            return "true" in out.lower()
+        except Exception:
+            pass
+    return False
+
+
 def is_excluded_or_sensitive(app_name: str, window_title: str, excluded_apps: list[str]) -> bool:
     low_app = app_name.lower()
     low_title = window_title.lower()
@@ -66,6 +113,35 @@ def is_excluded_or_sensitive(app_name: str, window_title: str, excluded_apps: li
     if any(hint in low_title for hint in SENSITIVE_TITLE_HINTS):
         return True
     return False
+
+
+def _run_powershell(script: str, timeout: int = 8) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            "powershell",
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            script,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+
+
+def _load_linux_atspi() -> Any | None:
+    try:
+        import gi  # type: ignore[import-not-found]
+
+        gi.require_version("Atspi", "2.0")
+        from gi.repository import Atspi  # type: ignore[import-not-found]
+
+        return Atspi
+    except Exception:
+        return None
 
 
 def list_running_apps() -> list[dict[str, Any]]:
@@ -89,22 +165,53 @@ def list_running_apps() -> list[dict[str, Any]]:
 
     if system == "Windows":
         try:
-            out = subprocess.check_output(
-                [
-                    "powershell",
-                    "-NoProfile",
-                    "-Command",
-                    "Get-Process | Where-Object {$_.MainWindowTitle} | Select-Object -ExpandProperty ProcessName -Unique",
-                ],
-                text=True,
+            proc = _run_powershell(
+                "Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle } | Select-Object -ExpandProperty ProcessName -Unique | Sort-Object",
                 timeout=5,
             )
-            for line in out.splitlines():
-                name = line.strip()
-                if name:
-                    results.append({"name": name, "platform": "Windows"})
+            if proc.returncode == 0:
+                for line in proc.stdout.splitlines():
+                    name = line.strip()
+                    if name:
+                        results.append({"name": name, "platform": "Windows"})
         except Exception:
             pass
+        return results
+
+    if system == "Linux":
+        seen_linux: set[str] = set()
+        # 1. Prefer AT-SPI2 accessible application list (works across GNOME/KDE on X11 & Wayland when enabled).
+        Atspi = _load_linux_atspi()
+        if Atspi is not None:
+            try:
+                desktop = Atspi.get_desktop(0)
+                if desktop is not None:
+                    for i in range(desktop.get_child_count()):
+                        child = desktop.get_child_at_index(i)
+                        if child and child.get_name():
+                            name = str(child.get_name()).strip()
+                            if name and name not in seen_linux:
+                                seen_linux.add(name)
+                                results.append({"name": name, "platform": "Linux"})
+            except Exception:
+                pass
+        # 2. X11 wmctrl window listing.
+        if not results and not linux_is_wayland() and shutil.which("wmctrl"):
+            try:
+                raw = subprocess.check_output(["wmctrl", "-lp"], text=True, timeout=4)
+                for line in raw.splitlines():
+                    parts = line.split()
+                    if len(parts) >= 3 and parts[2].isdigit():
+                        pid = int(parts[2])
+                        try:
+                            name = psutil.Process(pid).name()
+                            if name and name not in seen_linux:
+                                seen_linux.add(name)
+                                results.append({"name": name, "platform": "Linux (X11)"})
+                        except Exception:
+                            pass
+            except Exception:
+                pass
         return results
 
     return results
@@ -132,10 +239,10 @@ def get_frontmost_application() -> dict[str, Any]:
                     k, v = line.split("=", 1)
                     k = k.strip().strip('"').lower()
                     v = v.strip().strip('"')
-                    if k == "lsdisplayname" or k == "cfbundlename" or k == "name":
+                    if k in ("lsdisplayname", "cfbundlename", "name"):
                         if v:
                             app_name = v
-                    elif k == "cfbundleidentifier" or k == "bundleid":
+                    elif k in ("cfbundleidentifier", "bundleid"):
                         bundle_id = v
                     elif k == "pid" and v.isdigit():
                         pid = int(v)
@@ -180,34 +287,253 @@ def get_frontmost_application() -> dict[str, Any]:
             ),
         }
 
+    if system == "Windows":
+        try:
+            user32 = ctypes.windll.user32  # type: ignore[attr-defined]
+            hwnd = user32.GetForegroundWindow()
+            length = user32.GetWindowTextLengthW(hwnd)
+            buf = ctypes.create_unicode_buffer(max(length + 1, 256))
+            user32.GetWindowTextW(hwnd, buf, len(buf))
+            window_title = buf.value.strip()
+            pid_c = ctypes.c_ulong(0)
+            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid_c))
+            pid_val = int(pid_c.value)
+            app_name = psutil.Process(pid_val).name() if pid_val else "Unknown"
+            if app_name.lower().endswith(".exe"):
+                app_name = app_name[:-4]
+            return {
+                "platform": "Windows",
+                "app_name": app_name,
+                "pid": pid_val or None,
+                "window_title": window_title or "Active window (untitled)",
+                "accessibility_granted": True,
+                "status": "ok",
+                "note": "Active window verified via Win32 User32 GetForegroundWindow.",
+            }
+        except Exception as exc:
+            return {
+                "platform": "Windows",
+                "app_name": "Unknown",
+                "window_title": "Could not inspect foreground window",
+                "accessibility_granted": True,
+                "status": "error",
+                "note": redact_sensitive_text(str(exc)),
+            }
+
     if system == "Linux":
-        if os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland" or os.environ.get(
-            "WAYLAND_DISPLAY"
-        ):
+        wayland = linux_is_wayland()
+        atspi_ready = linux_dbus_service_present("org.a11y.Bus")
+        if wayland:
+            Atspi = _load_linux_atspi()
+            if Atspi is not None:
+                try:
+                    desktop = Atspi.get_desktop(0)
+                    for i in range(desktop.get_child_count()):
+                        app = desktop.get_child_at_index(i)
+                        if not app:
+                            continue
+                        for j in range(app.get_child_count()):
+                            win = app.get_child_at_index(j)
+                            if win and win.get_state_set().contains(Atspi.StateType.ACTIVE):
+                                return {
+                                    "platform": "Linux (Wayland)",
+                                    "app_name": str(app.get_name() or "Unknown"),
+                                    "window_title": str(win.get_name() or "Active window"),
+                                    "accessibility_granted": True,
+                                    "status": "ok",
+                                    "note": "Active window resolved via AT-SPI2 accessibility bus under Wayland.",
+                                }
+                except Exception:
+                    pass
             return {
                 "platform": "Linux (Wayland)",
                 "app_name": "Isolated by Wayland compositor",
-                "window_title": "Wayland blocks global window inspection without a compositor portal",
-                "accessibility_granted": False,
+                "window_title": "Wayland blocks global window inspection without AT-SPI2 or a compositor portal",
+                "accessibility_granted": atspi_ready,
                 "status": "unsupported",
-                "note": "OmniDesk respects Wayland isolation.",
+                "note": "OmniDesk respects Wayland isolation and never uses unsafe hooks.",
             }
+
+        if shutil.which("xdotool"):
+            try:
+                wid = subprocess.check_output(["xdotool", "getactivewindow"], text=True, timeout=3).strip()
+                title = subprocess.check_output(["xdotool", "getwindowname", wid], text=True, timeout=3).strip()
+                pid_str = subprocess.check_output(["xdotool", "getwindowpid", wid], text=True, timeout=3).strip()
+                pid_val = int(pid_str) if pid_str.isdigit() else None
+                app_name = psutil.Process(pid_val).name() if pid_val else "X11 Application"
+                return {
+                    "platform": "Linux (X11)",
+                    "app_name": app_name,
+                    "pid": pid_val,
+                    "window_title": title or "Active X11 window",
+                    "accessibility_granted": atspi_ready,
+                    "status": "ok",
+                    "note": "Active window resolved via X11 xdotool and process table.",
+                }
+            except Exception:
+                pass
         return {
             "platform": "Linux (X11)",
             "app_name": "X11 Session",
-            "window_title": "Inspectable via AT-SPI / X11",
-            "accessibility_granted": False,
+            "window_title": "Install xdotool or enable AT-SPI2 for live window titles",
+            "accessibility_granted": atspi_ready,
             "status": "experimental",
-            "note": "Linux X11 adapter ready for host testing.",
+            "note": "X11 session detected without xdotool on PATH.",
         }
 
     return {
         "platform": system,
-        "app_name": "Windows Foreground App",
-        "window_title": "Inspectable via Windows UI Automation adapter",
+        "app_name": "Unknown",
+        "window_title": "Unsupported OS",
+        "accessibility_granted": False,
+        "status": "unsupported",
+        "note": f"Unsupported platform: {system}.",
+    }
+
+
+def _inspect_windows_uia_tree(target: str) -> dict[str, Any]:
+    escaped = target.replace("'", "''")
+    script = f"""
+Add-Type -AssemblyName UIAutomationClient
+Add-Type -AssemblyName UIAutomationTypes
+$target = '{escaped}'
+$proc = Get-Process | Where-Object {{ $_.MainWindowHandle -ne 0 -and ($_.ProcessName -ieq $target -or $_.MainWindowTitle -ilike "*$target*") }} | Select-Object -First 1
+if (-not $proc) {{
+  Write-Output '{{"missing": true}}'
+  exit 0
+}}
+$root = [System.Windows.Automation.AutomationElement]::FromHandle($proc.MainWindowHandle)
+$cond = [System.Windows.Automation.Condition]::TrueCondition
+$nodes = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $cond)
+$items = @()
+for ($i = 0; $i -lt [Math]::Min($nodes.Count, 40); $i++) {{
+  $el = $nodes.Item($i)
+  try {{
+    if ($el.Current.IsPassword) {{
+      $items += @{{ role = 'REDACTED'; name = 'Secure Password Field skipped' }}
+    }} else {{
+      $role = $el.Current.ControlType.ProgrammaticName
+      $name = $el.Current.Name
+      if ([string]::IsNullOrWhiteSpace($name)) {{ $name = $role }}
+      $items += @{{ role = $role; name = $name }}
+    }}
+  }} catch {{}}
+}}
+@{{ missing = $false; window_title = $proc.MainWindowTitle; elements = $items }} | ConvertTo-Json -Depth 4 -Compress
+"""
+    proc = _run_powershell(script, timeout=10)
+    if proc.returncode != 0 or not proc.stdout.strip():
+        return {
+            "app_name": target,
+            "accessibility_granted": True,
+            "blocked_by_privacy": False,
+            "elements": [],
+            "message": redact_sensitive_text(proc.stderr.strip() or "Windows UIA inspection failed."),
+        }
+    data = json.loads(proc.stdout.strip())
+    if data.get("missing"):
+        return {
+            "app_name": target,
+            "accessibility_granted": True,
+            "blocked_by_privacy": False,
+            "elements": [],
+            "message": f"Application '{target}' does not have an open window.",
+        }
+    raw_items = data.get("elements") or []
+    if isinstance(raw_items, dict):
+        raw_items = [raw_items]
+    elements = [
+        {
+            "role": str(item.get("role", "Control")),
+            "name": redact_sensitive_text(str(item.get("name", ""))),
+            "selector": f"uia://window[@name='{target}']//{item.get('role', 'Control')}[@name='{item.get('name', '')}']",
+        }
+        for item in raw_items[:40]
+    ]
+    return {
+        "app_name": target,
+        "window_title": data.get("window_title") or "Front Window",
         "accessibility_granted": True,
-        "status": "experimental",
-        "note": "Windows UIA runtime pending Windows host validation.",
+        "blocked_by_privacy": False,
+        "element_count": len(elements),
+        "elements": elements,
+        "message": f"Inspected {len(elements)} Windows UIA element(s) in '{target}'.",
+    }
+
+
+def _inspect_linux_atspi_tree(target: str) -> dict[str, Any]:
+    Atspi = _load_linux_atspi()
+    if Atspi is None:
+        return {
+            "app_name": target,
+            "accessibility_granted": linux_dbus_service_present("org.a11y.Bus"),
+            "blocked_by_privacy": False,
+            "elements": [],
+            "message": "AT-SPI2 Python bindings (python3-gi + gir1.2-atspi-2.0) are not installed on this host.",
+        }
+
+    desktop = Atspi.get_desktop(0)
+    matched_app = None
+    for i in range(desktop.get_child_count()):
+        app = desktop.get_child_at_index(i)
+        if app and target.lower() in str(app.get_name() or "").lower():
+            matched_app = app
+            break
+
+    if matched_app is None:
+        return {
+            "app_name": target,
+            "accessibility_granted": True,
+            "blocked_by_privacy": False,
+            "elements": [],
+            "message": f"Application '{target}' was not found on the AT-SPI2 accessibility tree.",
+        }
+
+    elements: list[dict[str, str]] = []
+    win_title = ""
+
+    def walk(node: Any, depth: int) -> None:
+        nonlocal win_title
+        if node is None or depth > 5 or len(elements) >= 40:
+            return
+        try:
+            role = node.get_role()
+            role_name = str(node.get_role_name() or "widget")
+            name = str(node.get_name() or "").strip()
+            if depth == 1 and not win_title and name:
+                win_title = name
+            if role == Atspi.Role.PASSWORD_TEXT:
+                elements.append(
+                    {
+                        "role": "REDACTED",
+                        "name": "Password field skipped",
+                        "selector": f"atspi://app[@name='{target}']//REDACTED",
+                    }
+                )
+                return
+            if depth >= 1 and (name or role_name in ("push button", "menu item", "text", "entry")):
+                label = redact_sensitive_text(name or role_name)
+                elements.append(
+                    {
+                        "role": role_name,
+                        "name": label,
+                        "selector": f"atspi://app[@name='{target}']//{role_name}[@name='{label}']",
+                    }
+                )
+            for idx in range(min(node.get_child_count(), 25)):
+                walk(node.get_child_at_index(idx), depth + 1)
+        except Exception:
+            return
+
+    walk(matched_app, 0)
+    return {
+        "app_name": target,
+        "window_title": win_title or target,
+        "accessibility_granted": True,
+        "blocked_by_privacy": False,
+        "element_count": len(elements),
+        "elements": elements,
+        "message": f"Inspected {len(elements)} AT-SPI2 semantic element(s) in '{target}'.",
     }
 
 
@@ -361,12 +687,18 @@ end tell
             "message": f"Inspected {len(elements)} semantic UI element(s) in '{target}'.",
         }
 
+    if system == "Windows":
+        return _inspect_windows_uia_tree(target)
+
+    if system == "Linux":
+        return _inspect_linux_atspi_tree(target)
+
     return {
         "app_name": target,
         "accessibility_granted": False,
         "blocked_by_privacy": False,
         "elements": [],
-        "message": f"Live Accessibility tree inspection is experimental on {system}.",
+        "message": f"Accessibility tree inspection is unsupported on {system}.",
     }
 
 
@@ -393,8 +725,6 @@ def open_document_in_app(
         )
         if proc.returncode != 0:
             raise RuntimeError(proc.stderr.strip() or f"macOS could not open '{fpath.name}' in '{clean_app}'.")
-        import time
-
         app_verified = False
         running: list[str] = []
         for _ in range(10):
@@ -413,19 +743,41 @@ def open_document_in_app(
         }
 
     if system == "Windows":
-        proc = subprocess.run(
-            ["powershell", "-NoProfile", "-Command", f"Start-Process -FilePath '{clean_app}' -ArgumentList '{fpath}'"],
-            capture_output=True,
-            text=True,
+        esc_app = clean_app.replace("'", "''")
+        esc_path = str(fpath).replace("'", "''")
+        proc = _run_powershell(
+            f"Start-Process -FilePath '{esc_app}' -ArgumentList '\"{esc_path}\"' -ErrorAction Stop",
             timeout=15,
         )
         if proc.returncode != 0:
             raise RuntimeError(proc.stderr.strip() or f"Windows could not open '{fpath.name}' in '{clean_app}'.")
-        return {"app_name": clean_app, "file_path": str(fpath), "platform": "Windows", "launched": True}
+        app_verified = False
+        running = []
+        for _ in range(10):
+            running = [a["name"] for a in list_running_apps()]
+            if any(clean_app.lower() in r.lower() for r in running):
+                app_verified = True
+                break
+            time.sleep(0.2)
+        return {
+            "app_name": clean_app,
+            "file_path": str(fpath),
+            "platform": "Windows",
+            "launched": True,
+            "process_verified": app_verified,
+            "running_apps_count": len(running),
+        }
 
-    proc = subprocess.run(["xdg-open", str(fpath)], capture_output=True, text=True, timeout=15)
-    if proc.returncode != 0:
-        raise RuntimeError(proc.stderr.strip() or f"Linux could not open '{fpath.name}'.")
+    # Linux: prefer gtk-launch when an explicit app desktop entry exists, falling back to xdg-open.
+    launched = False
+    if shutil.which("gtk-launch"):
+        desktop_id = f"{clean_app.lower().replace(' ', '-')}.desktop"
+        proc = subprocess.run(["gtk-launch", desktop_id, str(fpath)], capture_output=True, text=True, timeout=10)
+        launched = proc.returncode == 0
+    if not launched:
+        proc = subprocess.run(["xdg-open", str(fpath)], capture_output=True, text=True, timeout=15)
+        if proc.returncode != 0:
+            raise RuntimeError(proc.stderr.strip() or f"Linux could not open '{fpath.name}'.")
     return {"app_name": clean_app, "file_path": str(fpath), "platform": "Linux", "launched": True}
 
 
@@ -435,24 +787,22 @@ def click_semantic_element(
     excluded_apps: list[str],
     role: str = "button",
 ) -> dict[str, Any]:
-    """Target-verified semantic Accessibility click (never runs without prior user approval)."""
+    """Target-verified semantic Accessibility click across macOS AX, Windows UIA, and Linux AT-SPI2."""
     clean_app = validate_app_name(app_name)
     if is_excluded_or_sensitive(clean_app, element_name, excluded_apps):
         raise PermissionError(f"Interaction blocked for sensitive application '{clean_app}'.")
 
-    if platform.system() != "Darwin":
-        raise RuntimeError(
-            f"Semantic UI clicking on {platform.system()} requires host runtime verification."
-        )
-    if not macos_accessibility_trusted():
-        raise PermissionError(
-            "macOS Accessibility permission is required before OmniDesk can click UI elements."
-        )
-
-    safe_app = clean_app.replace('"', "")
+    system = platform.system()
     safe_el = element_name.strip().replace('"', "")
-    ax_kind = "button" if role == "button" else "menu item"
-    script = f'''
+
+    if system == "Darwin":
+        if not macos_accessibility_trusted():
+            raise PermissionError(
+                "macOS Accessibility permission is required before OmniDesk can click UI elements."
+            )
+        safe_app = clean_app.replace('"', "")
+        ax_kind = "button" if role == "button" else "menu item"
+        script = f'''
 tell application "{safe_app}" to activate
 delay 0.25
 tell application "System Events"
@@ -461,20 +811,100 @@ tell application "System Events"
   end tell
 end tell
 '''
-    proc = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=8)
-    if proc.returncode != 0:
-        raise RuntimeError(
-            redact_sensitive_text(
-                proc.stderr.strip() or f"Could not find {ax_kind} '{safe_el}' in '{clean_app}'."
+        proc = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=8)
+        if proc.returncode != 0:
+            raise RuntimeError(
+                redact_sensitive_text(
+                    proc.stderr.strip() or f"Could not find {ax_kind} '{safe_el}' in '{clean_app}'."
+                )
             )
-        )
-    return {
-        "app_name": clean_app,
-        "element_name": safe_el,
-        "role": ax_kind,
-        "clicked": True,
-        "target_verified": True,
-    }
+        return {
+            "app_name": clean_app,
+            "element_name": safe_el,
+            "role": ax_kind,
+            "clicked": True,
+            "target_verified": True,
+        }
+
+    if system == "Windows":
+        esc_app = clean_app.replace("'", "''")
+        esc_el = safe_el.replace("'", "''")
+        script = f"""
+Add-Type -AssemblyName UIAutomationClient
+Add-Type -AssemblyName UIAutomationTypes
+$proc = Get-Process | Where-Object {{ $_.MainWindowHandle -ne 0 -and ($_.ProcessName -ieq '{esc_app}' -or $_.MainWindowTitle -ilike '*{esc_app}*') }} | Select-Object -First 1
+if (-not $proc) {{ throw "Target application not running." }}
+$root = [System.Windows.Automation.AutomationElement]::FromHandle($proc.MainWindowHandle)
+$cond = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, '{esc_el}')
+$el = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $cond)
+if (-not $el) {{ throw "UI element '{esc_el}' not found in '{esc_app}'." }}
+if ($el.Current.IsPassword) {{ throw "REFUSED_PASSWORD_FIELD" }}
+$pat = $null
+if ($el.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$pat)) {{
+  $pat.Invoke()
+  Write-Output "INVOKED"
+}} elseif ($el.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern, [ref]$pat)) {{
+  $pat.Toggle()
+  Write-Output "TOGGLED"
+}} else {{
+  throw "Element does not support UIA InvokePattern or TogglePattern."
+}}
+"""
+        proc = _run_powershell(script, timeout=10)
+        if proc.returncode != 0:
+            err = proc.stderr.strip()
+            if "REFUSED_PASSWORD_FIELD" in err:
+                raise PermissionError("Refused interacting with a Windows password control.")
+            raise RuntimeError(redact_sensitive_text(err or f"Windows UIA click failed for '{safe_el}'."))
+        return {
+            "app_name": clean_app,
+            "element_name": safe_el,
+            "role": role,
+            "clicked": True,
+            "target_verified": True,
+        }
+
+    if system == "Linux":
+        Atspi = _load_linux_atspi()
+        if Atspi is None:
+            raise RuntimeError("Linux AT-SPI2 bindings are unavailable; cannot perform semantic click safely.")
+        desktop = Atspi.get_desktop(0)
+        found = None
+
+        def find_node(node: Any, depth: int) -> Any:
+            if node is None or depth > 6:
+                return None
+            if node.get_role() == Atspi.Role.PASSWORD_TEXT:
+                return None
+            if str(node.get_name() or "").strip().lower() == safe_el.lower():
+                return node
+            for idx in range(min(node.get_child_count(), 30)):
+                res = find_node(node.get_child_at_index(idx), depth + 1)
+                if res is not None:
+                    return res
+            return None
+
+        for i in range(desktop.get_child_count()):
+            app = desktop.get_child_at_index(i)
+            if app and clean_app.lower() in str(app.get_name() or "").lower():
+                found = find_node(app, 0)
+                if found is not None:
+                    break
+        if found is None:
+            raise RuntimeError(f"AT-SPI2 element '{safe_el}' not found in '{clean_app}'.")
+        action_iface = found.get_action_iface()
+        if action_iface is None or action_iface.get_n_actions() < 1:
+            raise RuntimeError(f"AT-SPI2 element '{safe_el}' exposes no invokable action.")
+        action_iface.do_action(0)
+        return {
+            "app_name": clean_app,
+            "element_name": safe_el,
+            "role": role,
+            "clicked": True,
+            "target_verified": True,
+        }
+
+    raise RuntimeError(f"Semantic UI clicking is unsupported on {system}.")
 
 
 def type_text_into_target(
@@ -482,25 +912,23 @@ def type_text_into_target(
     text: str,
     excluded_apps: list[str],
 ) -> dict[str, Any]:
-    """Target-verified controlled keyboard entry with secure-field refusal."""
+    """Target-verified controlled keyboard entry with secure-field refusal across macOS, Windows, and Linux."""
     clean_app = validate_app_name(app_name)
     if is_excluded_or_sensitive(clean_app, "", excluded_apps):
         raise PermissionError(f"Keyboard input blocked for sensitive application '{clean_app}'.")
     if len(text) > 1000:
         raise ValueError("Controlled text entry is bounded to 1000 characters per step.")
 
-    if platform.system() != "Darwin":
-        raise RuntimeError(
-            f"Controlled keyboard entry on {platform.system()} requires host runtime verification."
-        )
-    if not macos_accessibility_trusted():
-        raise PermissionError(
-            "macOS Accessibility permission is required before OmniDesk can type into external apps."
-        )
+    system = platform.system()
 
-    safe_app = clean_app.replace('"', "")
-    safe_text = text.replace("\\", "\\\\").replace('"', '\\"')
-    script = f'''
+    if system == "Darwin":
+        if not macos_accessibility_trusted():
+            raise PermissionError(
+                "macOS Accessibility permission is required before OmniDesk can type into external apps."
+            )
+        safe_app = clean_app.replace('"', "")
+        safe_text = text.replace("\\", "\\\\").replace('"', '\\"')
+        script = f'''
 tell application "{safe_app}" to activate
 delay 0.2
 tell application "System Events"
@@ -514,17 +942,103 @@ tell application "System Events"
   end tell
 end tell
 '''
-    proc = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=8)
-    if proc.returncode != 0:
-        err = proc.stderr.strip()
-        if "REFUSED_SECURE_FIELD" in err:
-            raise PermissionError("Refused typing into a macOS secure password field.")
-        raise RuntimeError(redact_sensitive_text(err or f"Failed typing into '{clean_app}'."))
-    return {
-        "app_name": clean_app,
-        "characters_typed": len(text),
-        "target_verified": True,
-    }
+        proc = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=8)
+        if proc.returncode != 0:
+            err = proc.stderr.strip()
+            if "REFUSED_SECURE_FIELD" in err:
+                raise PermissionError("Refused typing into a macOS secure password field.")
+            raise RuntimeError(redact_sensitive_text(err or f"Failed typing into '{clean_app}'."))
+        return {"app_name": clean_app, "characters_typed": len(text), "target_verified": True}
+
+    if system == "Windows":
+        esc_app = clean_app.replace("'", "''")
+        esc_text = text.replace("'", "''")
+        # Escape SendKeys special characters safely if ValuePattern is not exposed.
+        sendkeys_safe = re.sub(r"([+^%~(){}\[\]])", r"{\1}", text).replace("'", "''")
+        script = f"""
+Add-Type -AssemblyName UIAutomationClient
+Add-Type -AssemblyName UIAutomationTypes
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class WinFocus2 {{ [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd); }}' -ErrorAction SilentlyContinue
+$proc = Get-Process | Where-Object {{ $_.MainWindowHandle -ne 0 -and ($_.ProcessName -ieq '{esc_app}' -or $_.MainWindowTitle -ilike '*{esc_app}*') }} | Select-Object -First 1
+if (-not $proc) {{ throw "Target application not running." }}
+[WinFocus2]::SetForegroundWindow($proc.MainWindowHandle) | Out-Null
+Start-Sleep -Milliseconds 180
+$focused = [System.Windows.Automation.AutomationElement]::FocusedElement
+if ($focused -and $focused.Current.IsPassword) {{ throw "REFUSED_SECURE_FIELD" }}
+$pat = $null
+if ($focused -and $focused.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$pat)) {{
+  $pat.SetValue('{esc_text}')
+  Write-Output "VALUE_PATTERN"
+}} else {{
+  [System.Windows.Forms.SendKeys]::SendWait('{sendkeys_safe}')
+  Write-Output "SENDKEYS"
+}}
+"""
+        proc = _run_powershell(script, timeout=10)
+        if proc.returncode != 0:
+            err = proc.stderr.strip()
+            if "REFUSED_SECURE_FIELD" in err:
+                raise PermissionError("Refused typing into a Windows password field.")
+            raise RuntimeError(redact_sensitive_text(err or f"Windows text input failed for '{clean_app}'."))
+        return {"app_name": clean_app, "characters_typed": len(text), "target_verified": True}
+
+    if system == "Linux":
+        # 1. Prefer AT-SPI2 EditableText (works without unsafe global input injection, skips password fields).
+        Atspi = _load_linux_atspi()
+        if Atspi is not None:
+            desktop = Atspi.get_desktop(0)
+            for i in range(desktop.get_child_count()):
+                app = desktop.get_child_at_index(i)
+                if not app or clean_app.lower() not in str(app.get_name() or "").lower():
+                    continue
+                stack = [app]
+                visited = 0
+                while stack and visited < 200:
+                    node = stack.pop()
+                    visited += 1
+                    try:
+                        if node.get_state_set().contains(Atspi.StateType.FOCUSED):
+                            if node.get_role() == Atspi.Role.PASSWORD_TEXT:
+                                raise PermissionError("Refused typing into a Linux password field.")
+                            editable = node.get_editable_text_iface()
+                            if editable is not None:
+                                editable.insert_text(0, text, len(text.encode("utf-8")))
+                                return {
+                                    "app_name": clean_app,
+                                    "characters_typed": len(text),
+                                    "target_verified": True,
+                                }
+                        for idx in range(min(node.get_child_count(), 25)):
+                            stack.append(node.get_child_at_index(idx))
+                    except PermissionError:
+                        raise
+                    except Exception:
+                        continue
+
+        # 2. Controlled X11 fallback ONLY on X11; never bypass Wayland isolation.
+        if linux_is_wayland():
+            raise PermissionError(
+                "Wayland restricts synthetic keyboard injection without a compositor RemoteDesktop portal; enable AT-SPI2 EditableText instead."
+            )
+        if not shutil.which("xdotool"):
+            raise RuntimeError("Install xdotool or enable AT-SPI2 EditableText for X11 text entry.")
+        front = get_frontmost_application()
+        if clean_app.lower() not in str(front.get("app_name", "")).lower():
+            raise PermissionError(
+                f"Active X11 window '{front.get('app_name')}' does not match approved target '{clean_app}'."
+            )
+        proc = subprocess.run(
+            ["xdotool", "type", "--clearmodifiers", "--delay", "12", "--", text],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if proc.returncode != 0:
+            raise RuntimeError(redact_sensitive_text(proc.stderr.strip() or "xdotool text entry failed."))
+        return {"app_name": clean_app, "characters_typed": len(text), "target_verified": True}
+
+    raise RuntimeError(f"Controlled keyboard entry is unsupported on {system}.")
 
 
 def open_os_permission_settings(pane: str) -> dict[str, Any]:
@@ -540,8 +1054,19 @@ def open_os_permission_settings(pane: str) -> dict[str, Any]:
         subprocess.run(["open", urls[pane]], check=True, timeout=5)
         return {"opened": True, "pane": pane, "platform": "macOS"}
     if system == "Windows":
-        subprocess.run(["explorer.exe", "ms-settings:privacy"], check=False, timeout=5)
+        uri = "ms-settings:easeofaccess-display" if pane == "accessibility" else "ms-settings:privacy"
+        subprocess.run(["explorer.exe", uri], check=False, timeout=5)
         return {"opened": True, "pane": pane, "platform": "Windows"}
+    if system == "Linux":
+        de = os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
+        if "gnome" in de and shutil.which("gnome-control-center"):
+            panel = "universal-access" if pane == "accessibility" else "privacy"
+            subprocess.Popen(["gnome-control-center", panel])
+            return {"opened": True, "pane": pane, "platform": "Linux (GNOME)"}
+        if ("kde" in de or "plasma" in de) and shutil.which("systemsettings"):
+            mod = "kcm_access" if pane == "accessibility" else "kcm_flatpak"
+            subprocess.Popen(["systemsettings", mod])
+            return {"opened": True, "pane": pane, "platform": "Linux (KDE)"}
     return {
         "opened": False,
         "pane": pane,

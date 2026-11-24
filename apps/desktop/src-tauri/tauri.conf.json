@@ -42,7 +42,7 @@
     ],
     "category": "Productivity",
     "shortDescription": "Universal AI Computer Operator",
-    "longDescription": "OmniDesk understands, interacts with, and automates real desktop environments with local-first privacy and explicit approval controls.",
+    "longDescription": "OmniDesk understands, interacts with, and automates real desktop environments across macOS, Windows, and Linux with local-first privacy and explicit approval controls.",
     "copyright": "Copyright (c) 2026 NGOPREK DIGITAL",
     "macOS": {
       "minimumSystemVersion": "13.0",
@@ -50,13 +50,33 @@
     },
     "windows": {
       "digestAlgorithm": "sha256",
+      "webviewInstallMode": {
+        "type": "embedBootstrapper"
+      },
       "nsis": {
         "installMode": "currentUser"
       }
     },
     "linux": {
       "deb": {
-        "section": "utils"
+        "section": "utils",
+        "depends": [
+          "libwebkit2gtk-4.1-0",
+          "libayatana-appindicator3-1",
+          "libsecret-1-0",
+          "libatspi2.0-0"
+        ]
+      },
+      "rpm": {
+        "depends": [
+          "webkit2gtk4.1",
+          "libappindicator-gtk3",
+          "libsecret",
+          "at-spi2-core"
+        ]
+      },
+      "appimage": {
+        "bundleMediaFramework": false
       }
     }
   }

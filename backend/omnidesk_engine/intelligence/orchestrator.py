@@ -27,6 +27,7 @@ from omnidesk_engine.schemas import (
     TaskArtifact,
     TaskRun,
     TaskStatus,
+    TokenUsage,
     utc_now_iso,
 )
 from omnidesk_engine.security.policy import SlidingWindowRateLimiter, redact_sensitive_text
@@ -84,7 +85,7 @@ class TaskOrchestrator:
         provider_id: str | None = None,
     ) -> TaskRun:
         self._rate_limiter.check_and_record()
-        title, steps, source, scope = await self.planner.build_plan(
+        title, steps, source, scope, usage, fallback_note = await self.planner.build_plan(
             prompt=prompt,
             target_directory=target_directory,
             dry_run_only=dry_run_only,
@@ -96,6 +97,8 @@ class TaskOrchestrator:
             steps=steps,
             planner_source=source,
             target_scope=scope,
+            usage=usage,
+            fallback_note=fallback_note,
         )
 
     async def start_preplanned_task(
@@ -105,6 +108,8 @@ class TaskOrchestrator:
         steps: list[ActionStep],
         planner_source: str,
         target_scope: str | None = None,
+        usage: TokenUsage | None = None,
+        fallback_note: str | None = None,
     ) -> TaskRun:
         if len(steps) > self.config.max_task_steps:
             raise ValueError(f"Plan exceeds maximum allowed steps ({self.config.max_task_steps}).")
@@ -117,6 +122,8 @@ class TaskOrchestrator:
             planner_source=planner_source,
             target_scope=target_scope,
             steps=steps,
+            usage=usage,
+            fallback_note=fallback_note,
         )
         self.db.save_task(task)
         self.db.add_audit("task", "created", f"Started task '{title}' ({len(steps)} steps).", task_id=task.id)

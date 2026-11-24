@@ -176,17 +176,17 @@ impl PlatformAdapter for MacOsAdapter {
             },
             CapabilityEntry {
                 id: "macos.screen_capture".into(),
-                name: "ScreenCaptureKit / Screen Recording".into(),
+                name: "ScreenCaptureKit / Screen Recording (Optional)".into(),
                 category: "vision".into(),
                 status: if screen { "available" } else { "permission_required" }.into(),
                 maturity: "implemented_tested".into(),
                 detail: if screen {
                     "Screen Recording granted for explicit opt-in Live Workspace snapshots.".into()
                 } else {
-                    "Grant Screen Recording in System Settings > Privacy & Security for opt-in Live Workspace previews."
+                    "Optional. Semantic Accessibility automation works without Screen Recording."
                         .into()
                 },
-                platform_note: Some("Single-shot capture runs only on explicit user action.".into()),
+                platform_note: Some("Deferred by default; single-shot capture runs only on explicit user action.".into()),
             },
             CapabilityEntry {
                 id: "macos.keychain".into(),
@@ -231,7 +231,7 @@ impl PlatformAdapter for MacOsAdapter {
             Command::new("osascript")
                 .args([
                     "-e",
-                    "tell application \"System Events\" to get title of front window of first application process whose frontmost is true",
+                    "tell application \"System Events\" to get name of window 1 of (first application process whose frontmost is true)",
                 ])
                 .output()
                 .ok()

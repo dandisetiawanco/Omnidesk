@@ -23,11 +23,19 @@ pub struct SystemProfile {
 }
 
 fn check_ollama_installed() -> bool {
-    Command::new("ollama")
-        .arg("--version")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+    let candidates = [
+        "ollama",
+        "/usr/local/bin/ollama",
+        "/opt/homebrew/bin/ollama",
+        "/Applications/Ollama.app/Contents/Resources/ollama",
+    ];
+    candidates.iter().any(|bin| {
+        Command::new(bin)
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    })
 }
 
 fn check_playwright_browser_cache() -> bool {

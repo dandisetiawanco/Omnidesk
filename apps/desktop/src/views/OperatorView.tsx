@@ -119,6 +119,12 @@ export const OperatorView: React.FC<OperatorViewProps> = ({
                 <p className="text-sm text-muted">
                   Planner: <span className="mono">{selected.planner_source}</span>
                   {selected.duration_ms != null ? ` | Duration: ${selected.duration_ms} ms` : ""}
+                  {selected.usage
+                    ? ` | Tokens: ${selected.usage.total_tokens} (${selected.usage.latency_ms} ms)`
+                    : ""}
+                  {selected.usage?.estimated_cost_usd != null && selected.usage.estimated_cost_usd > 0
+                    ? ` | Est. $${selected.usage.estimated_cost_usd.toFixed(5)}`
+                    : ""}
                 </p>
               </div>
               <div className="flex-row flex-wrap">
@@ -198,6 +204,12 @@ export const OperatorView: React.FC<OperatorViewProps> = ({
                 >
                   Review &amp; Decide
                 </button>
+              </div>
+            )}
+
+            {selected.fallback_note && (
+              <div className="panel-subtle text-sm">
+                <strong>Planner Fallback Notice:</strong> {selected.fallback_note}
               </div>
             )}
 

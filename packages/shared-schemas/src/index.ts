@@ -69,16 +69,31 @@ export const ProviderIdSchema = z.enum([
 ]);
 export type ProviderId = z.infer<typeof ProviderIdSchema>;
 
+export const TokenUsageSchema = z.object({
+  provider_id: z.string(),
+  model: z.string(),
+  prompt_tokens: z.number().int().nonnegative(),
+  completion_tokens: z.number().int().nonnegative(),
+  total_tokens: z.number().int().nonnegative(),
+  estimated_cost_usd: z.number().nonnegative().nullable().optional(),
+  latency_ms: z.number().int().nonnegative(),
+});
+export type TokenUsage = z.infer<typeof TokenUsageSchema>;
+
 export const ProviderStatusSchema = z.object({
   id: ProviderIdSchema,
   label: z.string(),
   kind: z.enum(["local", "cloud", "custom"]),
   configured: z.boolean(),
   reachable: z.boolean(),
+  runtime_installed: z.boolean().optional(),
   status_detail: z.string(),
   base_url: z.string().optional(),
   masked_key: z.string().optional(),
+  primary_model: z.string().nullable().optional(),
+  context_limit: z.number().int().optional(),
   available_models: z.array(z.string()),
+  loaded_models: z.array(z.string()).optional(),
   model_capabilities: z.record(z.array(z.string())).optional(),
   selected_models: z.object({
     planning: z.string().optional(),
@@ -166,6 +181,8 @@ export const TaskRunSchema = z.object({
       kind: z.string(),
     })
   ),
+  usage: TokenUsageSchema.nullable().optional(),
+  fallback_note: z.string().nullable().optional(),
 });
 export type TaskRun = z.infer<typeof TaskRunSchema>;
 
@@ -269,5 +286,7 @@ export const AppSettingsSchema = z.object({
   global_shortcut: z.string(),
   onboarding_completed: z.boolean(),
   telemetry_enabled: z.boolean(),
+  provider_fallback_order: z.array(z.string()).optional(),
+  local_context_limit: z.number().int().optional(),
 });
 export type AppSettings = z.infer<typeof AppSettingsSchema>;

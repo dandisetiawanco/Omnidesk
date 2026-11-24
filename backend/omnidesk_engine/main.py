@@ -54,6 +54,7 @@ def create_app(config: EngineConfig | None = None) -> FastAPI:
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         yield
         teach_engine.stop_all_observers()
+        await providers.cancel_all_inference()
         orchestrator.emergency_stop_all()
 
     api = FastAPI(
@@ -162,6 +163,67 @@ def create_app(config: EngineConfig | None = None) -> FastAPI:
                 return item.model_dump()
         raise HTTPException(status_code=404, detail="Provider not found.")
 
+    @api.post("/api/providers/ollama/start", dependencies=[Depends(require_auth)])
+    async def start_ollama() -> dict[str, Any]:
+        try:
+            return await providers.start_ollama_service()
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    @api.post("/api/providers/ollama/pull", dependencies=[Depends(require_auth)])
+    async def pull_ollama_model(payload: dict[str, Any]) -> dict[str, Any]:
+        model = str(payload.get("model") or "").strip()
+        if not model:
+            raise HTTPException(status_code=400, detail="Missing 'model' field.")
+        try:
+            return await providers.pull_ollama_model(model)
+        except (ValueError, RuntimeError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @api.get("/api/providers/ollama/pull-status", dependencies=[Depends(require_auth)])
+    async def ollama_pull_status() -> dict[str, Any]:
+        return providers.get_pull_status()
+
+    @api.post("/api/providers/ollama/unload", dependencies=[Depends(require_auth)])
+    async def unload_ollama_model(payload: dict[str, Any]) -> dict[str, Any]:
+        model = str(payload.get("model") or "").strip()
+        if not model:
+            raise HTTPException(status_code=400, detail="Missing 'model' field.")
+        try:
+            return await providers.unload_ollama_model(model)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @api.delete("/api/providers/ollama/models/{model_name:path}", dependencies=[Depends(require_auth)])
+    async def delete_ollama_model(model_name: str) -> dict[str, Any]:
+        try:
+            return await providers.delete_ollama_model(model_name)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @api.post("/api/providers/cancel", dependencies=[Depends(require_auth)])
+    async def cancel_provider_inference() -> dict[str, Any]:
+        cancelled = await providers.cancel_all_inference()
+        return {"cancelled": cancelled}
+
+    @api.post("/api/providers/stream-preview", dependencies=[Depends(require_auth)])
+    async def stream_provider_preview(request: Request, payload: dict[str, Any]) -> StreamingResponse:
+        prompt = str(payload.get("prompt") or "").strip()
+        if not prompt:
+            raise HTTPException(status_code=400, detail="Missing 'prompt' field.")
+        preferred = payload.get("provider_id")
+
+        async def generator() -> AsyncIterator[str]:
+            try:
+                async for event in providers.stream_inference_preview(prompt, preferred_provider=preferred):
+                    if await request.is_disconnected():
+                        break
+                    yield f"data: {json.dumps(event)}\n\n"
+            except Exception as exc:
+                yield f"data: {json.dumps({'event': 'error', 'message': str(exc)})}\n\n"
+
+        return StreamingResponse(generator(), media_type="text/event-stream")
+
     # --- Tasks & Execution Engine ---
     @api.get("/api/tasks", dependencies=[Depends(require_auth)])
     async def list_tasks(limit: int = 40) -> list[dict[str, Any]]:
@@ -234,8 +296,9 @@ def create_app(config: EngineConfig | None = None) -> FastAPI:
     @api.post("/api/emergency-stop", dependencies=[Depends(require_auth)])
     async def emergency_stop() -> dict[str, Any]:
         teach_engine.stop_all_observers()
+        cancelled_ai = await providers.cancel_all_inference()
         stopped = orchestrator.emergency_stop_all()
-        return {"stopped_task_ids": stopped, "count": len(stopped)}
+        return {"stopped_task_ids": stopped, "count": len(stopped), "cancelled_inference": cancelled_ai}
 
     @api.post("/api/demo/setup-downloads", dependencies=[Depends(require_auth)])
     async def setup_demo() -> dict[str, Any]:

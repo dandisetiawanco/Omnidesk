@@ -55,6 +55,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   global_shortcut: "CommandOrControl+Shift+Space",
   onboarding_completed: true,
   telemetry_enabled: false,
+  provider_fallback_order: ["ollama", "gemini", "openai", "anthropic", "openai_compatible"],
+  local_context_limit: 2048,
 };
 
 const SECTION_TITLES: Record<SectionId, string> = {
@@ -652,6 +654,8 @@ export const App: React.FC = () => {
               {section === "models" && (
                 <ModelsView
                   providers={providers}
+                  settings={settings}
+                  onSaveSettings={handleSaveSettings}
                   onRefresh={async (probe = false) => setProviders(await api.listProviders(probe))}
                   onNotify={notify}
                 />

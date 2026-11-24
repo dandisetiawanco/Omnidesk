@@ -170,6 +170,8 @@ class OmniDeskApiClient {
       api_key?: string;
       clear_key?: boolean;
       base_url?: string;
+      primary_model?: string;
+      context_limit?: number;
       selected_models?: { planning?: string; vision?: string; lightweight?: string };
     }
   ): Promise<ProviderStatus> {
@@ -181,6 +183,98 @@ class OmniDeskApiClient {
 
   testProvider(providerId: string): Promise<ProviderStatus> {
     return this.request(`/api/providers/${providerId}/test`, { method: "POST" });
+  }
+
+  startOllama(): Promise<{
+    started: boolean;
+    already_running: boolean;
+    models: string[];
+    loaded: string[];
+    detail: string;
+  }> {
+    return this.request("/api/providers/ollama/start", { method: "POST" });
+  }
+
+  pullOllamaModel(model: string): Promise<{
+    status: string;
+    percent: number;
+    completed_mb: number;
+    total_mb: number;
+  }> {
+    return this.request("/api/providers/ollama/pull", {
+      method: "POST",
+      body: JSON.stringify({ model }),
+    });
+  }
+
+  getOllamaPullStatus(): Promise<
+    Record<string, { status: string; percent: number; completed_mb: number; total_mb: number }>
+  > {
+    return this.request("/api/providers/ollama/pull-status");
+  }
+
+  unloadOllamaModel(model: string): Promise<{ unloaded: boolean; model: string }> {
+    return this.request("/api/providers/ollama/unload", {
+      method: "POST",
+      body: JSON.stringify({ model }),
+    });
+  }
+
+  deleteOllamaModel(model: string): Promise<{ deleted: boolean; model: string }> {
+    return this.request(`/api/providers/ollama/models/${encodeURIComponent(model)}`, {
+      method: "DELETE",
+    });
+  }
+
+  cancelProviderInference(): Promise<{ cancelled: number }> {
+    return this.request("/api/providers/cancel", { method: "POST" });
+  }
+
+  async streamProviderPreview(
+    prompt: string,
+    providerId: string | undefined,
+    onEvent: (event: {
+      event: string;
+      provider?: string;
+      model?: string;
+      text?: string;
+      message?: string;
+      prompt_tokens?: number;
+      completion_tokens?: number;
+    }) => void,
+    signal: AbortSignal
+  ): Promise<void> {
+    await this.init();
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (this.token) headers.Authorization = `Bearer ${this.token}`;
+    const resp = await fetch(`${this.baseUrl}/api/providers/stream-preview`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ prompt, provider_id: providerId }),
+      signal,
+    });
+    if (!resp.ok || !resp.body) {
+      throw new Error(`Streaming request failed (${resp.status})`);
+    }
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (!signal.aborted) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const blocks = buffer.split("\n\n");
+      buffer = blocks.pop() ?? "";
+      for (const block of blocks) {
+        const dataLine = block.split("\n").find((l) => l.startsWith("data:"));
+        if (!dataLine) continue;
+        try {
+          onEvent(JSON.parse(dataLine.slice(5).trim()));
+        } catch {
+          // Skip partial chunk.
+        }
+      }
+    }
   }
 
   listTasks(): Promise<TaskRun[]> {

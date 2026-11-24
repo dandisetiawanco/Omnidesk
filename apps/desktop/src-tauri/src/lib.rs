@@ -81,7 +81,48 @@ fn locate_backend_dir() -> Option<PathBuf> {
     None
 }
 
+/// Locates a packaged standalone OmniDesk engine sidecar binary (no Python required for end users).
+fn locate_bundled_sidecar() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let dir = exe.parent()?;
+    let bin_name = if cfg!(target_os = "windows") {
+        "omnidesk-engine.exe"
+    } else {
+        "omnidesk-engine"
+    };
+    let direct = dir.join(bin_name);
+    if direct.is_file() {
+        return Some(direct);
+    }
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                if name.starts_with("omnidesk-engine-") && path.is_file() {
+                    return Some(path);
+                }
+            }
+        }
+    }
+    None
+}
+
 fn spawn_local_engine(port: u16, token: &str) -> Option<Child> {
+    // 1. Packaged distribution mode: launch bundled self-contained backend sidecar directly.
+    if let Some(sidecar_bin) = locate_bundled_sidecar() {
+        if let Ok(child) = Command::new(sidecar_bin)
+            .env("OMNIDESK_SESSION_TOKEN", token)
+            .env("OMNIDESK_HOST", "127.0.0.1")
+            .env("OMNIDESK_PORT", port.to_string())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+        {
+            return Some(child);
+        }
+    }
+
+    // 2. Development mode: launch local Python engine from workspace backend/.venv.
     let backend_dir = locate_backend_dir()?;
     let venv_python = if cfg!(target_os = "windows") {
         backend_dir.join(".venv/Scripts/python.exe")

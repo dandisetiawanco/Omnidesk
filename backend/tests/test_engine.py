@@ -18,7 +18,11 @@ from omnidesk_engine.security.policy import (
 
 
 @pytest.fixture()
-def test_app(tmp_path: Path):
+def test_app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    # Isolate deterministic unit tests from any host Ollama instance running on 127.0.0.1:11434.
+    from omnidesk_engine.providers.registry import PROVIDER_CATALOG
+
+    monkeypatch.setitem(PROVIDER_CATALOG["ollama"], "default_url", "http://127.0.0.1:1")
     cfg = EngineConfig(
         host="127.0.0.1",
         port=17499,
